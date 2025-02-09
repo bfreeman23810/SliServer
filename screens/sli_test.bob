@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Saved on 2025-02-07 08:36:39 by brian-->
+<display version="2.0.0">
+  <name>XY Plot</name>
+  <width>1150</width>
+  <height>900</height>
+  <widget type="xyplot" version="3.0.0">
+    <name>X/Y Plot</name>
+    <y>900</y>
+    <x_axis>
+      <title>X</title>
+      <autoscale>false</autoscale>
+      <log_scale>false</log_scale>
+      <minimum>-2.0</minimum>
+      <maximum>22.0</maximum>
+      <show_grid>false</show_grid>
+      <title_font>
+        <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+        </font>
+      </title_font>
+      <scale_font>
+        <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+        </font>
+      </scale_font>
+      <visible>true</visible>
+    </x_axis>
+    <y_axes>
+      <y_axis>
+        <title>Y</title>
+        <autoscale>false</autoscale>
+        <log_scale>false</log_scale>
+        <minimum>-10.0</minimum>
+        <maximum>10.0</maximum>
+        <show_grid>false</show_grid>
+        <title_font>
+          <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+          </font>
+        </title_font>
+        <scale_font>
+          <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+          </font>
+        </scale_font>
+        <on_right>false</on_right>
+        <visible>true</visible>
+        <color>
+          <color name="Text" red="0" green="0" blue="0">
+          </color>
+        </color>
+      </y_axis>
+    </y_axes>
+    <traces>
+      <trace>
+        <name>Histogram</name>
+        <x_pv></x_pv>
+        <y_pv>sim://sinewave(1, 16, 20, 0.2, -10, 10)</y_pv>
+        <err_pv></err_pv>
+        <axis>0</axis>
+        <trace_type>5</trace_type>
+        <color>
+          <color red="0" green="0" blue="255">
+          </color>
+        </color>
+        <line_width>0</line_width>
+        <line_style>0</line_style>
+        <point_type>0</point_type>
+        <point_size>10</point_size>
+        <visible>true</visible>
+      </trace>
+      <trace>
+        <name>Bars</name>
+        <x_pv></x_pv>
+        <y_pv>sim://sinewave(1, 16, 20, 0.2, 10, -10)</y_pv>
+        <err_pv></err_pv>
+        <axis>0</axis>
+        <trace_type>5</trace_type>
+        <color>
+          <color red="0" green="255" blue="0">
+          </color>
+        </color>
+        <line_width>5</line_width>
+        <line_style>0</line_style>
+        <point_type>0</point_type>
+        <point_size>10</point_size>
+        <visible>true</visible>
+      </trace>
+    </traces>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_28</name>
+    <text>The "Bars" type of trace displays a bar for each element of a waveform, up/down from zero.
+
+The width of the bar is controlled by the "Line Width" of the trace.
+
+For a "Line Width" of zero, the bar graph turns into a histogram-type display with adjacent bars.</text>
+    <x>410</x>
+    <y>930</y>
+    <width>260</width>
+    <height>300</height>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_29</name>
+    <text>Bar Graph</text>
+    <x>410</x>
+    <y>900</y>
+    <width>221</width>
+    <font>
+      <font name="Header 2" family="Liberation Sans" style="BOLD" size="18.0">
+      </font>
+    </font>
+  </widget>
+  <widget type="image" version="2.0.0">
+    <name>Image_1</name>
+    <pv_name>SIM:image1:ArrayData</pv_name>
+    <x>40</x>
+    <y>413</y>
+    <width>600</width>
+    <height>400</height>
+    <show_toolbar>true</show_toolbar>
+    <x_axis>
+      <visible>false</visible>
+      <title>X</title>
+      <minimum>0.0</minimum>
+      <maximum>620.0</maximum>
+      <title_font>
+        <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+        </font>
+      </title_font>
+      <scale_font>
+        <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+        </font>
+      </scale_font>
+    </x_axis>
+    <y_axis>
+      <visible>false</visible>
+      <title>Y</title>
+      <minimum>0.0</minimum>
+      <maximum>420.0</maximum>
+      <title_font>
+        <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+        </font>
+      </title_font>
+      <scale_font>
+        <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+        </font>
+      </scale_font>
+    </y_axis>
+    <data_width>600</data_width>
+    <data_height>400</data_height>
+    <unsigned>true</unsigned>
+  </widget>
+  <widget type="xyplot" version="3.0.0">
+    <name>X/Y Plot_1</name>
+    <x>20</x>
+    <y>223</y>
+    <width>561</width>
+    <height>190</height>
+    <x_axis>
+      <title>X</title>
+      <autoscale>true</autoscale>
+      <log_scale>false</log_scale>
+      <minimum>0.0</minimum>
+      <maximum>slic:X:XValues</maximum>
+      <show_grid>false</show_grid>
+      <title_font>
+        <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+        </font>
+      </title_font>
+      <scale_font>
+        <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+        </font>
+      </scale_font>
+      <visible>true</visible>
+    </x_axis>
+    <y_axes>
+      <y_axis>
+        <title>Y</title>
+        <autoscale>true</autoscale>
+        <log_scale>false</log_scale>
+        <minimum>0.0</minimum>
+        <maximum>100.0</maximum>
+        <show_grid>false</show_grid>
+        <title_font>
+          <font name="Default Bold" family="Liberation Sans" style="BOLD" size="14.0">
+          </font>
+        </title_font>
+        <scale_font>
+          <font name="Default" family="Liberation Sans" style="REGULAR" size="14.0">
+          </font>
+        </scale_font>
+        <on_right>false</on_right>
+        <visible>true</visible>
+        <color>
+          <color name="Text" red="0" green="0" blue="0">
+          </color>
+        </color>
+      </y_axis>
+    </y_axes>
+    <traces>
+      <trace>
+        <name>$(traces[0].y_pv)</name>
+        <x_pv>slic:X:XValues</x_pv>
+        <y_pv>slic:X:Proj</y_pv>
+        <err_pv></err_pv>
+        <axis>0</axis>
+        <trace_type>1</trace_type>
+        <color>
+          <color red="0" green="0" blue="255">
+          </color>
+        </color>
+        <line_width>1</line_width>
+        <line_style>0</line_style>
+        <point_type>0</point_type>
+        <point_size>10</point_size>
+        <visible>true</visible>
+      </trace>
+      <trace>
+        <name>$(traces[1].y_pv)</name>
+        <x_pv>slic:X:XValues</x_pv>
+        <y_pv>slic:X:ProjFit</y_pv>
+        <err_pv></err_pv>
+        <axis>0</axis>
+        <trace_type>1</trace_type>
+        <color>
+          <color red="255" green="0" blue="0">
+          </color>
+        </color>
+        <line_width>1</line_width>
+        <line_style>0</line_style>
+        <point_type>0</point_type>
+        <point_size>10</point_size>
+        <visible>true</visible>
+      </trace>
+    </traces>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_3</name>
+    <pv_name>slic:server:heartbeat</pv_name>
+    <x>157</x>
+    <y>10</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="26" green="51" blue="153">
+      </color>
+    </background_color>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_4</name>
+    <text>Server Heartbeat</text>
+    <x>13</x>
+    <y>10</y>
+    <width>140</width>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_4</name>
+    <pv_name>slic:X:Disp</pv_name>
+    <x>398</x>
+    <y>121</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="0" green="26" blue="128">
+      </color>
+    </background_color>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+    <interactive>true</interactive>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_6</name>
+    <text>Dispersion</text>
+    <x>314</x>
+    <y>121</y>
+    <width>110</width>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry</name>
+    <x>450</x>
+    <y>90</y>
+    <width>0</width>
+    <height>0</height>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry_1</name>
+    <pv_name>slic:X:Disp</pv_name>
+    <x>527</x>
+    <y>121</y>
+    <width>110</width>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry_2</name>
+    <pv_name>slic:X:Emit</pv_name>
+    <x>527</x>
+    <y>145</y>
+    <width>110</width>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_5</name>
+    <pv_name>slic:X:Emit</pv_name>
+    <x>398</x>
+    <y>145</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="0" green="26" blue="128">
+      </color>
+    </background_color>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+    <interactive>true</interactive>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_7</name>
+    <text>Emittance</text>
+    <x>314</x>
+    <y>145</y>
+    <width>110</width>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry_3</name>
+    <pv_name>slic:X:Beta</pv_name>
+    <x>528</x>
+    <y>170</y>
+    <width>110</width>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_6</name>
+    <pv_name>slic:X:Beta</pv_name>
+    <x>399</x>
+    <y>170</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="0" green="26" blue="128">
+      </color>
+    </background_color>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+    <interactive>true</interactive>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_8</name>
+    <text>Beta</text>
+    <x>315</x>
+    <y>170</y>
+    <width>110</width>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry_4</name>
+    <pv_name>slic:X:Sig</pv_name>
+    <x>529</x>
+    <y>194</y>
+    <width>110</width>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_7</name>
+    <pv_name>slic:X:Sig</pv_name>
+    <x>400</x>
+    <y>194</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="0" green="26" blue="128">
+      </color>
+    </background_color>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+    <interactive>true</interactive>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_9</name>
+    <text>Sigma</text>
+    <x>316</x>
+    <y>194</y>
+    <width>110</width>
+  </widget>
+  <widget type="group" version="3.0.0">
+    <name>Group</name>
+    <x>30</x>
+    <y>140</y>
+    <width>255</width>
+    <height>70</height>
+    <style>3</style>
+    <transparent>true</transparent>
+    <widget type="textupdate" version="2.0.0">
+      <name>Text Update</name>
+      <pv_name>slic:X:Espread</pv_name>
+      <x>144</x>
+      <y>50</y>
+      <width>110</width>
+      <foreground_color>
+        <color name="Header_ForeGround" red="255" green="255" blue="255">
+        </color>
+      </foreground_color>
+      <background_color>
+        <color red="26" green="51" blue="153">
+        </color>
+      </background_color>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>Text Update_1</name>
+      <pv_name>slic:X:Visibility</pv_name>
+      <x>144</x>
+      <y>25</y>
+      <width>110</width>
+      <foreground_color>
+        <color name="Header_ForeGround" red="255" green="255" blue="255">
+        </color>
+      </foreground_color>
+      <background_color>
+        <color red="26" green="51" blue="153">
+        </color>
+      </background_color>
+    </widget>
+    <widget type="textupdate" version="2.0.0">
+      <name>Text Update_2</name>
+      <pv_name>slic:X:FitGoodness</pv_name>
+      <x>145</x>
+      <width>110</width>
+      <foreground_color>
+        <color name="Header_ForeGround" red="255" green="255" blue="255">
+        </color>
+      </foreground_color>
+      <background_color>
+        <color red="26" green="51" blue="153">
+        </color>
+      </background_color>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>Label_2</name>
+      <text>Fit Goodness</text>
+      <x>1</x>
+      <width>140</width>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>Label_1</name>
+      <text>Visibility</text>
+      <y>26</y>
+      <width>140</width>
+    </widget>
+    <widget type="label" version="2.0.0">
+      <name>Label</name>
+      <text>Energy Spread</text>
+      <y>49</y>
+      <width>140</width>
+    </widget>
+  </widget>
+  <widget type="label" version="2.0.0">
+    <name>Label_10</name>
+    <text>NFrames</text>
+    <x>314</x>
+    <y>98</y>
+    <width>110</width>
+  </widget>
+  <widget type="textupdate" version="2.0.0">
+    <name>Text Update_8</name>
+    <pv_name>slic:X:NFrames</pv_name>
+    <x>399</x>
+    <y>98</y>
+    <width>110</width>
+    <foreground_color>
+      <color name="Header_ForeGround" red="255" green="255" blue="255">
+      </color>
+    </foreground_color>
+    <background_color>
+      <color red="0" green="26" blue="128">
+      </color>
+    </background_color>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+    <interactive>true</interactive>
+  </widget>
+  <widget type="textentry" version="3.0.0">
+    <name>Text Entry_5</name>
+    <pv_name>slic:X:NFrames</pv_name>
+    <x>528</x>
+    <y>98</y>
+    <width>110</width>
+    <show_units>false</show_units>
+    <border_alarm_sensitive>false</border_alarm_sensitive>
+  </widget>
+</display>
