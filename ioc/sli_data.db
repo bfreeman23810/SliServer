@@ -1,0 +1,155 @@
+#############################
+#Server Records
+#############################
+record(ai,"$(P):server:heartbeat") {
+	field(PREC,"0")
+}
+
+record(ai,"$(P):server:disconnect") {
+	field(PREC,"0")
+	field(VAL,"0")
+}
+
+
+
+#############################
+#SLI Variables
+#############################
+record(ai,"$(P):sli:SlitDist") {
+	field(PREC,"1")
+	field(VAL,"6")
+	field(EGU,"mm")
+}
+
+
+#############################
+# X Axis
+#############################
+
+record(ai,"$(P):X:NFrames") {
+	field(PREC,"0")
+	field(VAL,"10")
+	
+}
+
+record(ai,"$(P):X:Espread") {
+	field(PREC,"2")
+	
+}
+
+record(ai,"$(P):X:EspreadErr") {
+	field(PREC,"3")
+}
+
+record(ai,"$(P):X:SigmaTwiss") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:SigmaTotal") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:SigmaEspread") {
+	field(PREC,"2")
+}
+
+record(ai,"$(P):X:SigmaEspreadErr") {
+	field(PREC,"3")
+}
+record(ai,"$(P):X:FitGoodness") {
+	field(PREC,"0")
+}
+record(ai,"$(P):X:Visibility") {
+	field(PREC,"2")
+}
+
+record(ai,"$(P):X:Delta") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:Zero") {
+	field(PREC,"0")
+}
+
+#Paramaters
+record(ai,"$(P):X:Sigma") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:SigmaErr") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:Fwhm") {
+	field(PREC,"2")
+}
+record(ai,"$(P):X:Rms") {
+	field(PREC,"2")
+}
+
+record(ai,"$(P):X:Avg") {
+	field(PREC,"2")
+}
+
+####################
+#Twiss Parameters
+###################
+
+record(ai,"$(P):X:Disp") {
+	field(PREC,"3")
+	field(EGU,"mm")
+}
+record(ai,"$(P):X:Alpha") {
+	field(PREC,"3")
+	
+}
+record(ai,"$(P):X:Beta") {
+	field(PREC,"3")
+	field(EGU,"volts")
+}
+record(ai,"$(P):X:Emit") {
+	field(PREC,"3")
+}
+
+record(ai,"$(P):X:Sig") {
+	field(PREC,"9")
+}
+
+
+#Waveforms for Profiles
+
+#Horizontal Axis Values
+record(waveform,"$(P):X:XValues") {
+	field(PREC,"2")
+	field(EGU,"units")
+	field(NELM,"5000")
+	field(FTVL,"FLOAT")
+}
+
+#Original Array Profile
+record(waveform,"$(P):X:Proj") {
+	field(PREC,"2")
+	field(EGU,"units")
+	field(NELM,"5000")
+	field(FTVL,"FLOAT")
+}
+
+#Wavform to store the Fit Y Values
+record(waveform,"$(P):X:ProjFit") {
+	field(PREC,"2")
+	field(EGU,"units")
+	field(NELM,"5000")
+	field(FTVL,"FLOAT")
+}
+
+
+record(waveform,"$(P):X:ProjGaussMax") {
+	field(PREC,"2")
+	field(EGU,"units")
+	field(NELM,"5000")
+	field(FTVL,"FLOAT")
+}
+
+record(waveform,"$(P):X:ProjGaussMin") {
+	field(PREC,"2")
+	field(EGU,"units")
+	field(NELM,"5000")
+	field(FTVL,"FLOAT")
+}
+
+
