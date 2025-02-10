@@ -1,7 +1,26 @@
 #!/home/brian/venv/bin/python3
 #!/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
 
+##
+# @mainpage SliServer Project
+#
+# @section description Description:
+# This project will be used to take in data from an EPICS Waveform and then use fitting
+# algorithms to fit the expected diffraction pattern. Then will send that data
+# back to EPICS. 
+# 
+# This server will also listen on a confirgured host and port, for communication
+# to the server. This default host and port will be included in the server.cfg file.
+#
 
+##
+# @file server.py
+# @brief This file will be the main entry point to the server. 
+# @author Brian Freeman
+# @par Revision History:
+#-Februray ??, 2025 Initial Release
+
+#standard imports
 import sys
 import time
 import socket
@@ -11,29 +30,28 @@ import asyncio
 import threading as t
 import time
 import os
-import epics as e
-from epics import ca
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 
+#import epics 
+import epics as e
+from epics import ca
+
+#local imports
 import SliData as sli
 import ad_image as ad
 
+## default config file
 config_file = "./server.cfg"
+## public lock object
 lock = t.Lock()
 
-"""
--Server will listen on a port, and wait for external triggers
--Setup will be waiting for EPICS events and can also be forced using server messages
-"""
 
 class ServerState(Enum):
+	"""! A class to use to keep track of server states"""
 	INIT="INIT"
 	START="START"
 	CONNECT="CONNECT"
-	LISTEN="LISTEN"
-	RESPOND="RESPOND"
-	EVENT="EVENT"
 	CHECK = "CHECK"
 	GET="GET"
 	FIT="FIT"
@@ -42,160 +60,115 @@ class ServerState(Enum):
 	DISCONNECT="DISCONNECT"
 
 class SliServer():
+	"""! Main Server class, that will provide the server functions. Server will have a thread
+	that will wait for client connections and then respond with a status. Listening thread
+	will also be able to signal the server to stop, from the client. There will also
+	be a thread that will continuesly get and process data from EPICS, then will update 
+	EPICS variables. This server will use two EPICS callback functions to use 
 	
-	array_counter=0
+	"""
+	
+	
 	
 	def __init__(self, config, host=None, port=None ):
+		"""!Initilize the SliServer object
+		@param config - config file
+		@param host - host to use, if not using from config file
+		@param port - port to use, if not using from config file
+		"""
 		
-		#ConfigParser object
+		## ConfigParser object
 		self.config = config
 		
+		## sli data object. data holder for model and fitting algorithms
 		self.sli_data = sli.SliData()
 		
+		## server heartbeat. Will use a seperate thread to update this heartbeat
 		self.heartbeat = 0
+		## boolean value to fit the fit_array
 		self.fit_now = False
+		## use this boolean as a global signal to run server
 		self.running = False
-		
+		## number of arrays collected, will use an EPICS variable to set the number of frames until averageing and fitting occurs
+		self.array_counter = 0
+		## a collection of ADImage objects, and provides convience functions to average
 		self.ad_image_collection = ad.ADImageCollection()
 		
-		self.threads = list()
 		
-		#check to see if host and port are parameters, if not set them to a default
+		# check to see if host and port are parameters, if not set them to a default
 		if host is not None:
 			self.host = host
 		else:
-			self.host = "127.0.0.1"
+			self.host = config.get("server" , "host")
 		
 		if port is not None:
 			self.port = port
 		else:
-			self.host = "12345"
+			self.host = config.get("server" , "port")
 		
-	
+		#set the server state to INIT
 		self.state = ServerState.INIT
         
-		#define know transitions in a dictionary
-		self.transitions = {
-		
-			ServerState.INIT: ServerState.START,
-			ServerState.START: ServerState.CONNECT,
-			ServerState.CONNECT: ServerState.LISTEN,
-			ServerState.LISTEN: ServerState.RESPOND,
-			ServerState.RESPOND:ServerState.LISTEN,
-			ServerState.EVENT:ServerState.CHECK,
-			ServerState.CHECK:ServerState.GET,
-			ServerState.GET:ServerState.FIT,
-			ServerState.FIT:ServerState.FIT_CHECK,
-			ServerState.FIT_CHECK:ServerState.PUT,
-			ServerState.PUT:ServerState.LISTEN,
-			ServerState.DISCONNECT:ServerState.DISCONNECT
-			
-		}
-			
+		## server message dictionary, will return a string based on state	
 		self.messages = {
 		
 			ServerState.INIT:"Server is initializing ... Please Wait",
 			ServerState.CONNECT:"Now connecting to EPICS channels ... ",
 			ServerState.START:"Starting Server ... ",
-			ServerState.LISTEN:"Server is waiting ...",
-			ServerState.RESPOND:"Server is responding ...",
-			ServerState.EVENT:"Trigger Event detected ...",
 			ServerState.CHECK:"Server checking EPICS channels still connected ...",
-			ServerState.GET:"Server is gettign data from EPICS ... ",
+			ServerState.GET:"Server is getting data from EPICS ... Running and OK",
 			ServerState.FIT:"Server is using data to fit ... ",
 			ServerState.FIT_CHECK:"Server is checking the quality of the fit, and validating ... ",
 			ServerState.PUT:"Server is sending data to EPICS ...",
 			ServerState.DISCONNECT:"Server is disconnecting ... "
 		
 				}
-				
-		self.message=self.messages[self.state]
-		
+						
 		
 	# Callback function to handle changes in the PV value
 	def uid_callback(self, pvname, value, **kwargs):
-		print(f"{pvname} = {value}")
-		#self.get()
-		
+		"""! EPICS AreaDetector PV ${P}:cam1:UniqueId_RBV callback  
+			On update it will release the lock object and in turn get the values from EPICS
+		"""
 		#release the lock, which triggers an update in the main loop
 		try:
+			#if running then release the lock
 			if self.running == True:
-				lock.release()
+				if lock.locked(): 
+					lock.release()
+			#else just remove this as a callback and disconnect		
 			else:
-				self.ad_pvs["id"].remove_callbacks()
+				self.ad_pvs["id"].clear_callbacks()
+				disconnect()
 		except Exception as e:
-			print( f"something is wrong ... {value}")
+			print( f"something is wrong {pvname} = {value}")
 			print(e)
 		#print('PV Changed! ', pvname, char_value, time.ctime())
 		
 	
 	def disconnect_monitor(self, pvname, value, **kwargs):
-		print(f"{pvname} = {value}")
+		"""! EPICS PV ${P}:server:disconnect signal callback, whcih just stops the server"""
 		
-		if value == 1:
-			print(f"Disconnect Signal from EPICS, disconnecting.....")
-			lock.release()
+		#if the value is anything but zero, then disconnect
+		if value != 0:
+			print(f"Disconnect Signal from EPICS, disconnecting.....{pvname} = {value}")
 			self.disconnect()
+		
+			#if lock is locked then release it, this will ensure that thread is not waiting
+			if lock.locked():
+				lock.release()
 			
-			
-	
-	def transition(self):
-		"""Transition to a new state."""
-		state = self.state
-		self.state = self.transitions[self.state]
-		self.message = self.messages[self.state]
-		print(f"Transitioning to {self.state} from {state}")
-		print(f"{self.message}")
-	
-	def action(self):
-	
-		if self.state == ServerState.INIT:
-			self.init()
-			
-		elif self.state == ServerState.START:
-			#start this in a new thread
-			print("start")
-			self.transition()
-			self.server_thread = threading.Thread( target=self.start )
-			#self.server_thread.start()
-			
-		elif self.state == ServerState.CONNECT:
-			self.connect(self.config)
-			self.heartbeat_thread = threading.Thread(target=self.heartbeat_counter)
-			self.heartbeat_thread.start()
-			
-		elif self.state == ServerState.CHECK:
-			self.check()
-	
-		elif self.state == ServerState.DISCONNECT:
-			self.disconnect()
-	
-		elif self.state == ServerState.GET:
-			self.get()
-	
-		elif self.state == ServerState.FIT:
-			self.fit()
-	
-		elif self.state == ServerState.FIT_CHECK:
-			self.fit_check()
-	
-		elif self.state == ServerState.PUT:
-			self.put()
-	
-		elif self.state == ServerState.LISTEN:
-			self.listen()
-	
-		elif self.state == ServerState.RESPOND:
-			self.respond()
-	
-		elif self.state == ServerState.EVENT:
-			self.event()
-		else:
-			print(f"No action for server state = {self.state}")
+	def get_message(self):
+		"""!get the message from server state"""
+		return self.messages[self.state]
+		
 	
 	
 	def start(self):
-		print(f"Server is in {self.state} state - in start()")
+		"""! Start the server, and just wait for client to ask status
+			Also will provide a method to remotely shut down the server
+		 """
+		self.state = ServerState.START
 		
 		"""Starts a server that communicates with clients and waits for new connections."""
 		with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -204,10 +177,8 @@ class SliServer():
 			server_socket.listen(1)  # Listen for up to 5 connections
 			print(f"Server is running on {self.host}:{self.port} and waiting for connections...")
 			
-			#before staring server loop, transition to next state
-			self.transition()
 			
-			while True:
+			while self.running:
 				try:
 					# Accept a new client connection
 					client_socket, client_address = server_socket.accept()
@@ -216,11 +187,10 @@ class SliServer():
 					# Handle communication with the client
 					with client_socket:
 						client_socket.sendall(b"Welcome to the server!\n")
-						client_socket.sendall(self.messages[self.state].encode('utf-8') )
-						while True:
+						client_socket.sendall(self.get_message().encode('utf-8') )
+						while self.running:
 							# Receive data from the client
 							data = client_socket.recv(1024)
-							#this could be where to parse out states
 							data_string = data.decode().strip()
 							
 							if not data:
@@ -230,40 +200,47 @@ class SliServer():
 							#echo server state
 							client_socket.sendall(self.messages[self.state].encode('utf-8') + b"\n")
 							
-							#wanted a method to force the server state
-							if data_string == 'transition':
-								self.transition()
-								self.action()
-								client_socket.sendall( b"Server is transitioning to the next state\n"  )
-							elif data_string == "event":
-								self.state = ServerState.EVENT
-								self.action()
+							#wanted a method to remotely check the status and send disconnect signal
+							if data_string == 'status':
+								if self.running == True:
+									client_socket.sendall( b"Server is Running \n"  )
+								client_socket.sendall(self.get_message().encode('utf-8') )
 							elif data_string == "disconnect":
-								self.state = ServerState.EVENT
-								self.action()
+								
+								self.disconnect()
 							
 							
-							client_socket.sendall( self.messages[self.state].encode('utf-8') +b"\n"  )
+							#client_socket.sendall( b" Server is =>   "+self.messages[self.state].encode('utf-8') +b"\n"  )
 							
 							
 							
 							# Echo the data back to the client
-							client_socket.sendall(data)
+							#client_socket.sendall(data)
+					
+					if lock.locked(): 
+						lock.release()
 					
 					client_socket.close()
 					print(f"Connection closed with {client_address}")
+					
 				except KeyboardInterrupt:
 					print("\nServer is shutting down...")
 					self.server_socket.close()
 					client_socket.close()
-
+					self.disconnect()
+					if lock.locked(): 
+						lock.release()
+	
 					break						
 		
 		
 	
 	def init(self):
-		print(f"Server is in {self.state} state - in init()")
+		"""! function will do some initial tasks before starting server threads
 		
+		"""
+		
+		#initilize the channel access library 
 		ca.initialize_libca()
 		
 		#attempt to set ca_max_array_bytes
@@ -271,6 +248,8 @@ class SliServer():
 		ca.max_array_bytes = num_bytes
 		os.environ['EPICS_CA_MAX_ARRAY_BYTES'] = str(num_bytes)
 		
+		#try to set the EPICS_CA_ADDR_LIST, if set just add local host
+		#this is mainly for testing
 		try:
 			addr_list = os.environ['EPICS_CA_ADDR_LIST']
 			os.environ['EPICS_CA_ADDR_LIST'] = f"{addr_list} 127.0.0.1"
@@ -284,60 +263,55 @@ class SliServer():
 		
 		#print(os.environ['EPICS_CA_ADDR_LIST'])
 		
+		#set main running boolean to True 
 		self.running = True
-
-		
-		self.transition()
 	
 	
 	def heartbeat_counter(self):
-		while self.state is not ServerState.DISCONNECT and self.running == True:
+		"""!This function will be started in a new daemon thread and be responsible for 
+		incrementing the heartbeat counter and  then updating the EPICS PV  
+		
+		"""
+		while self.running == True:
+			#sleep for 1 second
 			time.sleep(1)
+			#increment the counter
 			self.heartbeat = self.heartbeat + 1
+			
 			try:
+				#attempt to set the EPICS PV
 				self.output_pvs["heartbeat"].put( int( self.heartbeat ) )
 			except Exception as e:
 				print("Error in heartbeat update....")
 				print(e)
-				self.state = ServerState.DISCONNECT
+				#if an error was trapped, then disconnect the server
+				self.disconnect()
+	
+		
+				
 	
 	def check(self):
-		print(f"Server is in {self.state} state - in check()")
+		"""!
+			check that PVs are connected. Will attempt to reconnect. Some PVs should disconnect the server
+			if they are not connected
+		"""
+		self.state = ServerState.CHECK
 		
-		for key, value in self.ad_pvs.items():	
-			
+		for key,value in self.all_pvs.items():
 			if value.connected:
-				print(f"{key}: ")
-				print(f"{value.get()}")
+				continue
 			else:
-				print( f"{key} is disconnected" )
+				print(f"PV {value.pvname} seems disconnectd")
 				
-		
-		for key, value in self.input_pvs.items():
-			if value.connected:
-				print(f"{key}: {value.get()}")
-			else:
-				print( f"{key} is disconnected" )
-		
-		for key, value in self.output_pvs.items():
-			if value.connected:
-				print(f"{key}: {value.get()}")
-			else:
-				print( f"{key} is disconnected" )
-		
-		for key, value in self.defaults.items():
-			print(f"{key}: {value}")
-		
-		self.transition()
-	
+			
 	def get(self):
-		print(f"Server is in {self.state} state - in get()")
+		"""! do a get on connected channels and store them in variables
+			If the number of arrays matches the nframes PV from EPICS, then average 
+			and then fit the data
+		"""
+		self.state = ServerState.GET
 		
-		#use image profile to set the SliData object profile array 
-		#probably average these base on unique id events
-		 
-		
-		#check twiss values from EPICS, if they are non-zero use them
+		#check twiss values from EPICS, using the scaling factors to match CED order of magnitude
 		self.etax = float( self.input_pvs["etax"].get() )*(10**6) #number in meters, convert to microns
 		self.betax = float( self.input_pvs["betax"].get() )*(10**6) #number in meters, convert to microns
 		self.sigx = float( self.input_pvs["sigx"].get() )*(10**6) #number in meters, convert to microns
@@ -363,51 +337,60 @@ class SliServer():
 		
 		#init an ad_image object
 		self.ad_image = ad.ADImage(  self.ad_pvs["x_size"].get() , self.ad_pvs["y_size"].get() , self.ad_pvs["array"].get() )
+		#increment array counter
 		self.array_counter = self.array_counter+1
 		
-		
+		#add the image array to the collectcion
 		self.ad_image_collection.add(self.ad_image)
+		#set the array to the average of the arrays
 		self.array = self.ad_image_collection.average().get_x_profile()
 		
+		#set fit boolean to false
 		self.fit_now = False
 		
+		#if the number of arrays is greater than n_frames
 		if self.array_counter > self.n_frames:
+			#reset the array counter
 			self.array_counter=0
+			#clear the image array from ADImageCollection object
 			self.ad_image_collection.clear()
 			print(f"++++++++++++++++CLEARED+++++++++++++")
+			#set the fit boolean to true
 			self.fit_now = True
+			#set the fit array to the averaged array
 			self.set_array_to_fit( self.array )
-			self.transition()
 			
-		
-		#print(f"etax = { self.etax} , betax = {self.betax} , emitx = {self.emitx} , sigx = {self.sigx} , dist_slits={self.dist_slit}")
+			#print(f"etax = { self.etax} , betax = {self.betax} , emitx = {self.emitx} , sigx = {self.sigx} , dist_slits={self.dist_slit}")
 		
 		
 	def set_array_to_fit(self, array):
+		"""! Set the fit array
+		@param array - array to be fit
+		 """
 		self.array_to_fit = array	
-		
+	
 	def get_fit_array(self):
+		"""!fit array getter
+		@return array_to_fit
+		"""
 		return self.array_to_fit
 		
 	def fit(self):
-		print(f"Server is in {self.state} state - in fit()")
+		self.state = ServerState.FIT
 		
 		self.sli_data.set_array( self.get_fit_array()  , self.dist_slit )
 		self.sli_data.fit()
 		self.sli_data.set_beam_parameters(self.emitx , self.betax , self.etax , self.sigx)  
-		
-		self.transition()
-	
-		
-		
+			
 		
 	def fit_check(self):
-		print(f"Server is in {self.state} state - - in fit_check()")
+		self.state = ServerState.FIT_CHECK
+		#print(f"Server is in {self.state} state - - in fit_check()")
 		
-		self.transition()
 	
 	def put(self):
-		print(f"Server is in {self.state} state - in put()")
+		self.state = ServerState.PUT
+		#print(f"Server is in {self.state} state - in put()")
 		
 		#server output pvs
 		
@@ -426,38 +409,31 @@ class SliServer():
 		#~ self.output_pvs["proj_gaussian_max"].put(self.sli_data)
 		#~ self.output_pvs["proj_gaussian_min"].put(self.sli_data)
 		
-		#self.sli_data.plot()
 		
-		self.transition()
 		
-	def listen(self):
-		print(f"Server is in {self.state} state - in listen()")
-		self.transition()
-		
-	def respond(self):
-		print(f"Server is in {self.state} state - in resond()")
-		self.transition()
-		
-	def event(self):
-		print(f"Server is in {self.state} state - in event()")
-		self.state = ServerState.EVENT
-		self.transition()
-		
-	#take in the config object and then parse the epics channels
 	def connect(self , config):
+		"""! Uses the  global config file to try to connect to EPICS channels
+		
+		"""
+		self.state = ServerState.CONNECT
+		
 		global e
+		## dictionary to store AreaDetector PVS
 		self.ad_pvs = dict()
+		## dictionary to store input pvs
 		self.input_pvs = dict()
+		## dictionary to store output pvs
 		self.output_pvs = dict()
+		## dictionary to store defaults from config file 
 		self.defaults = dict()
 		
+		## dictionary to store all pvs
 		self.all_pvs = dict()
 		
 		try: 
 			
 			
 			#ad.epics.pvs - area detector pvs
-			#self.pvs['test'] = e.PV( "SIM:cam1:ArraySizeX_RBV" )
 			self.ad_pvs["array"] = e.PV( str( config.get("ad.epics.pvs" , "array") ) )
 			self.ad_pvs["x_size"] = e.PV( config.get("ad.epics.pvs" , "x_size") )
 			self.ad_pvs["y_size"] = e.PV( config.get("ad.epics.pvs" , "y_size") )
@@ -519,18 +495,13 @@ class SliServer():
 			print(e)
 			self.state=ServerState.DISCONNECT
 			
-		
 		self.all_pvs = self.ad_pvs | self.output_pvs | self.input_pvs
 				
-		#if we get here then transition to the next state
-		self.transition()
 	
 	
 	def disconnect(self):
 		self.state = ServerState.DISCONNECT
 		print(f"disconnecting ..... state = {self.state}")
-		#perhaps will need to do epics CA clean up
-		#self.ad_pvs["id"].disconnect()
 		
 		try:
 			self.running=False
@@ -549,7 +520,7 @@ class SliServer():
 		
 		
 		print("System is disconnecting without error .... ")
-		sys.exit(0)
+		#sys.exit(0)
 	
 	def fit_action(self):
 		if self.running == True:
@@ -563,36 +534,40 @@ class SliServer():
 		self.connect(self.config)
 		self.check()
 		
+		#start server thread. 
+		self.server_thread = t.Thread(target=self.start)
+		#start as daemon thread, so ending main event loop will not wait wait for join
+		self.server_thread.daemon = True
+		self.server_thread.start()
+		
+		
 		#start a thread to update a heartbeat pv. 
 		self.heartbeat_thread = t.Thread(target=self.heartbeat_counter)
+		#start as daemon thread, so ending main event loop will not wait wait for join
+		self.heartbeat_thread.daemon = True
 		self.heartbeat_thread.start()
-		self.threads.append( self.heartbeat_thread )
 		
-		print('Now wait for changes')
-		expire_time = time.time() + 10.
-		#while time.time() < expire_time:
 		
+		print('Now wait for changes .... ')
 		while self.running == True:
 			try:
+				#print("Lock aquire ... ")
 				lock.acquire()
-				
-				
-				self.event()
-				
+								
 				try:
-					
+					self.check()
 					self.get()
 				except Exception as e:
 					print(f"issue with getting ... \n{e}")
 				
-				
 				if self.fit_now:
-					#
+					
 					try:
 						#self.fit_action()
 						update_thread = t.Thread(target=self.fit_action)
+						#start as daemon thread, so ending main event loop will not wait for join 
+						update_thread.daemon = True
 						update_thread.start()
-						self.threads.append( self.heartbeat_thread )
 					except Exception as e:
 						print(f"probelm fitting ... \n{e}" )
 				
@@ -602,22 +577,7 @@ class SliServer():
 				print(f"Error in event loop ... disconnecting .....")
 				self.disconnect()
 			
-		self.disconnect()
-				
-		#for x in range(12):
-			#time.sleep(1)
-			#self.transition()
-			#self.action()
-			##asyncio.sleep(1)
-			#time.sleep(5)
-			
-			# ~ if(x==5):
-				# ~ self.state = ServerState.EVENT
-				# ~ print(f"{self.message}")
-				
-			# ~ print(f"x={x}")
-		
-		# ~ self.state = ServerState.DISCONNECT
+		#self.disconnect()
 		
 
 def main():
@@ -635,8 +595,6 @@ def main():
 	### read config file and parse values
 	
 	#check to see if config file was set on the command line, if not use the default
-	
-	
 	
 	# Create an instance of ConfigParser
 	config = configparser.ConfigParser()
@@ -667,18 +625,6 @@ def main():
 	
 	server.process()
 	
-	# ~ server.init()
-	# ~ server.connect(config)
-	# ~ server.check()
-	
-	# ~ print('Now wait for changes')
-	# ~ expire_time = time.time() + 5.
-	# ~ while time.time() < expire_time:
-		# ~ lock.acquire()
-		# ~ server.
-		# ~ time.sleep(0.05)
-	
-	# ~ print('Done.')
 
 if __name__ == "__main__":
     try:

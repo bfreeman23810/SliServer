@@ -452,14 +452,14 @@ class SliData():
 		#fit the model
 		self.result , self.chi2 , self.relibility = self.fit_diff_model( self.params , self.profile_array , self.xdata  )		
 		
-		if self.relibility == False:
-			print("Fit was BAD!")
-		else:
-			print("FIT was  GOOD")
+		#~ if self.relibility == False:
+			#~ print("Fit was BAD!")
+		#~ else:
+			#~ print("FIT was  GOOD")
 		
-		report_fit(self.result)
+		#report_fit(self.result)
 	
-		print("Params" + str(self.result.params.pretty_print()) )
+		#print("Params" + str(self.result.params.pretty_print()) )
 		self.final = self.result.residual + self.profile_array	
 		
 		#self.set_beam_parameters()
@@ -511,13 +511,13 @@ class SliData():
 		self.B = center_of_mass(self.profile_array)
 		self.D = (self.A * self.dist_slits)*2 
 		
-		print("Imin estimate = " + str(self.Imin) )
-		print( "V Estimate = " + str(self.V) )
-		print("Background Number is = " + str( self.IN ))
-		print("SR intenstity estimate , I0 Number is = " + str( self.I0 ))
-		print( "A = " + str(self.A) )
-		print("B = " + str(self.B))
-		print( "D = " + str( self.D ) )
+		#~ print("Imin estimate = " + str(self.Imin) )
+		#~ print( "V Estimate = " + str(self.V) )
+		#~ print("Background Number is = " + str( self.IN ))
+		#~ print("SR intenstity estimate , I0 Number is = " + str( self.I0 ))
+		#~ print( "A = " + str(self.A) )
+		#~ print("B = " + str(self.B))
+		#~ print( "D = " + str( self.D ) )
 		
 		#F is the phase offset
 		self.F = 0 # just set this to zero at first
@@ -553,8 +553,8 @@ class SliData():
 		else:
 			fit_good = True  
 		
-		print("T Stat = " + str(t_stat) )
-		print("P Val = " + str(p_value) )
+		#print("T Stat = " + str(t_stat) )
+		#print("P Val = " + str(p_value) )
 		
 		return fit_good , t_stat , p_value
 	
@@ -758,8 +758,8 @@ class SliData():
 		minL = np.min(arr1)
 		minR = np.min(arr2)
 		
-		print( "minL = " + str(minL) )
-		print( "minR = " + str(minR) )
+		#print( "minL = " + str(minL) )
+		#print( "minR = " + str(minR) )
 		
 		#choose the larger of the 2, and this is the background estimate
 		if minL > minR:
@@ -774,8 +774,8 @@ class SliData():
 		mean , noise = calc_noise( 0,profile_arr,len(profile_arr) )
 		
 		
-		print("IN = " + str(IN) )
-		print("noise = " + str(noise) )
+		#print("IN = " + str(IN) )
+		#print("noise = " + str(noise) )
 		
 		return noise
 	
@@ -822,17 +822,17 @@ class SliData():
 			self.betax = betax
 			 
 		sigma_beta = np.sqrt(  self.emitx * self.betax )
-		print("Sigma Beta Size = " + str(sigma_beta))
+		#print("Sigma Beta Size = " + str(sigma_beta))
 		return sigma_beta
 		
 	def calc_sigma_dispersion(self , sigma_beam , sigma_emit ):
 		sigma_disp = np.sqrt( abs( sigma_beam**2 - sigma_emit**2 ) )
-		print("Sigma From Dispersion = " + str(sigma_disp) )
+		#print("Sigma From Dispersion = " + str(sigma_disp) )
 		return sigma_disp
 	
 	def calc_espread(self, sigma_disp , disp):
 		espread= abs( sigma_disp/disp )
-		print("ESpread = " + str(espread))
+		#print("ESpread = " + str(espread))
 		return abs( espread )	
 	
 	def back_calc_visibility(self , slit_dist, lam , R , sigma):
@@ -870,9 +870,9 @@ class SliData():
 		
 		r, t, p = self.set_params_to_optimized(result.params)
 		
-		print( "DOF = " + str(self.dof) )
-		print( "chi2 = " + str(self.chi2) )
-		print( "chi2 res = " + str(chi2_res) )
+		#~ print( "DOF = " + str(self.dof) )
+		#~ print( "chi2 = " + str(self.chi2) )
+		#~ print( "chi2 res = " + str(chi2_res) )
 		
 		#print( "err = " + str( result.residual ) )
 		return result , self.chi2 , r
