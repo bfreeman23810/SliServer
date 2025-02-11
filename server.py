@@ -1,5 +1,5 @@
-#!/home/brian/venv/bin/python3
 #!/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
+#!/home/brian/venv/bin/python3
 
 ##
 # @mainpage SliServer Project
@@ -18,7 +18,7 @@
 # @brief This file will be the main entry point to the server. 
 # @author Brian Freeman
 # @par Revision History:
-#-Februray ??, 2025 Initial Release
+# -Februray ??, 2025 Initial Release
 
 #standard imports
 import sys
@@ -129,6 +129,7 @@ class SliServer():
 	def uid_callback(self, pvname, value, **kwargs):
 		"""! EPICS AreaDetector PV ${P}:cam1:UniqueId_RBV callback  
 			On update it will release the lock object and in turn get the values from EPICS
+			This PV is updated everytime there is a new image array to process
 		"""
 		#release the lock, which triggers an update in the main loop
 		try:
@@ -203,19 +204,19 @@ class SliServer():
 							#wanted a method to remotely check the status and send disconnect signal
 							if data_string == 'status':
 								if self.running == True:
-									client_socket.sendall( b"Server is Running \n"  )
+									client_socket.sendall( b"Running \n"  )
 								client_socket.sendall(self.get_message().encode('utf-8') )
 							elif data_string == "disconnect":
 								
 								self.disconnect()
 							
-							
-							#client_socket.sendall( b" Server is =>   "+self.messages[self.state].encode('utf-8') +b"\n"  )
-							
-							
+							time.sleep(0.2)
 							
 							# Echo the data back to the client
 							#client_socket.sendall(data)
+							
+							#sleep for a bit
+							time.sleep(0.2)
 					
 					if lock.locked(): 
 						lock.release()
@@ -239,7 +240,7 @@ class SliServer():
 		"""! function will do some initial tasks before starting server threads
 		
 		"""
-		
+	
 		#initilize the channel access library 
 		ca.initialize_libca()
 		
@@ -247,22 +248,7 @@ class SliServer():
 		num_bytes = 10000000000000000000000000000000
 		ca.max_array_bytes = num_bytes
 		os.environ['EPICS_CA_MAX_ARRAY_BYTES'] = str(num_bytes)
-		
-		#try to set the EPICS_CA_ADDR_LIST, if set just add local host
-		#this is mainly for testing
-		try:
-			addr_list = os.environ['EPICS_CA_ADDR_LIST']
-			os.environ['EPICS_CA_ADDR_LIST'] = f"{addr_list} 127.0.0.1"
-		except KeyError:
-			os.environ['EPICS_CA_ADDR_LIST'] = "127.0.0.1"
-			print(f"EPICS_CA_ADDR_LIST = ")
-		
-		#for testing I will use my local host to run a soft ioc, so need to update EPICS_CA_ADDR_LIST
-		#addr_list = os.environ['EPICS_CA_ADDR_LIST']
-		#os.environ['EPICS_CA_ADDR_LIST'] = f"{addr_list} 127.0.0.1"
-		
-		#print(os.environ['EPICS_CA_ADDR_LIST'])
-		
+	
 		#set main running boolean to True 
 		self.running = True
 	
@@ -342,8 +328,7 @@ class SliServer():
 		
 		#add the image array to the collectcion
 		self.ad_image_collection.add(self.ad_image)
-		#set the array to the average of the arrays
-		self.array = self.ad_image_collection.average().get_x_profile()
+		
 		
 		#set fit boolean to false
 		self.fit_now = False
@@ -352,14 +337,18 @@ class SliServer():
 		if self.array_counter > self.n_frames:
 			#reset the array counter
 			self.array_counter=0
-			#clear the image array from ADImageCollection object
-			self.ad_image_collection.clear()
-			print(f"++++++++++++++++CLEARED+++++++++++++")
+			
 			#set the fit boolean to true
 			self.fit_now = True
+			
+			#set the array to the average of the arrays
+			self.array = self.ad_image_collection.average().get_x_profile()
 			#set the fit array to the averaged array
 			self.set_array_to_fit( self.array )
 			
+			#clear the image array from ADImageCollection object
+			self.ad_image_collection.clear()
+			print(f"++++++++++++++++CLEARED+++++++++++++")
 			#print(f"etax = { self.etax} , betax = {self.betax} , emitx = {self.emitx} , sigx = {self.sigx} , dist_slits={self.dist_slit}")
 		
 		
@@ -376,24 +365,35 @@ class SliServer():
 		return self.array_to_fit
 		
 	def fit(self):
+		"""! Fit the array that was set in the get() function
+		"""
 		self.state = ServerState.FIT
 		
+		#set the array in the SliData object
 		self.sli_data.set_array( self.get_fit_array()  , self.dist_slit )
+		#do the fit
 		self.sli_data.fit()
+		#set the beam parameters, this function sets the beam size and energy spread, etc...
 		self.sli_data.set_beam_parameters(self.emitx , self.betax , self.etax , self.sigx)  
 			
 		
 	def fit_check(self):
+		"""!place holder to have a function that will check the fit quality and take some
+			action if the fit was bad. Thinking that that we narrow the array and then
+			re-fit. If fit is bad then, do not do the put.
+		"""
 		self.state = ServerState.FIT_CHECK
-		#print(f"Server is in {self.state} state - - in fit_check()")
+		
 		
 	
 	def put(self):
+		"""! This function is responsible for setting the EPICS PVS from the output_pvs 
+		dictionary
+		"""
 		self.state = ServerState.PUT
 		#print(f"Server is in {self.state} state - in put()")
 		
 		#server output pvs
-		
 		self.output_pvs["espread"].put( self.sli_data.get_espread() )
 		self.output_pvs["sigma_total"].put(self.sli_data.get_sigma_total()  )
 		self.output_pvs["sigma_twiss"].put( self.sli_data.get_sigma_twiss() )
@@ -413,7 +413,6 @@ class SliServer():
 		
 	def connect(self , config):
 		"""! Uses the  global config file to try to connect to EPICS channels
-		
 		"""
 		self.state = ServerState.CONNECT
 		
@@ -430,8 +429,8 @@ class SliServer():
 		## dictionary to store all pvs
 		self.all_pvs = dict()
 		
+		#try to connect EPICS PVs
 		try: 
-			
 			
 			#ad.epics.pvs - area detector pvs
 			self.ad_pvs["array"] = e.PV( str( config.get("ad.epics.pvs" , "array") ) )
@@ -479,56 +478,67 @@ class SliServer():
 			self.defaults["sigx"] = config.get("sli.defaults" , "sigx") 
 			self.defaults["nframes"] = config.get("sli.defaults" , "nframes") 
 
+			#wait for connect
 			e.ca.pend_io(timeout=2.0)
+			#wait some additional time
 			time.sleep(2)
+			
+			#now check the for connections of the 2 PVs that we are adding callbacks to.
 			if self.ad_pvs["id"].connected:
 				
+				#Add the callback function to Unique_Id PV from AreaDetector
 				self.ad_pvs["id"].add_callback( self.uid_callback ) 
 				#print(f"{self.ad_pvs['id'].info}" )
 				
 			if self.input_pvs["disconnect"].connected:
+				#This is the server disconnect PV, so I want to force this to zero
 				self.input_pvs["disconnect"].put(0) #init this value to zero
+				#add the callback, that monitors for change in this value. 
 				self.input_pvs["disconnect"].add_callback( self.disconnect_monitor ) 
 		
+		#if an error is trapped on conenction, then disconnect the server
 		except Exception as e:
 			print(f"Something wrong with connecting PVs ... Server is diconnecting:")
 			print(e)
 			self.state=ServerState.DISCONNECT
-			
+		
+		#update the dictionary that will hold all the PVs for easy checking of connection	
 		self.all_pvs = self.ad_pvs | self.output_pvs | self.input_pvs
 				
 	
 	
 	def disconnect(self):
+		"""!Disconnect the server"""
 		self.state = ServerState.DISCONNECT
 		print(f"disconnecting ..... state = {self.state}")
 		
 		try:
+			#set the running flag to False/ 
 			self.running=False
 			
+			#disconnect PVs
 			for key,value in self.all_pvs.items():
 				value.disconnect()
 			
+			#clear the callbacks
 			self.ad_pvs["id"].clear_callbacks()
 			self.input_pvs["disconnect"].clear_callbacks()
 		
-			#for thread in self.threads:
-				#thread.kill()
+		#if there are trapped errors, then exit.  
 		except Exception as e:
 			print(f"Problem disconnecting ... {e}")
 			sys.exit(1)
-		
-		
-		print("System is disconnecting without error .... ")
-		#sys.exit(0)
+			
 	
 	def fit_action(self):
+		"""!fitting actions"""
 		if self.running == True:
 			self.fit()
+			self.fit_check()
 			self.put()
 		
 	def process(self):	
-		
+		"""!Main processing loop, this loop will be the main event loop"""
 		#initilize and the connect the PVs from the defined config file
 		self.init()
 		self.connect(self.config)
@@ -551,19 +561,22 @@ class SliServer():
 		print('Now wait for changes .... ')
 		while self.running == True:
 			try:
-				#print("Lock aquire ... ")
+				#lock the thread, until there is an update to the Unique_Id PV
 				lock.acquire()
-								
+				
+				#check the PVS, and then get the values from EPICS				
 				try:
 					self.check()
 					self.get()
 				except Exception as e:
 					print(f"issue with getting ... \n{e}")
 				
+				#if the boolean fit now was set, which happens in the get() function, then
+				#do the fit action
 				if self.fit_now:
 					
 					try:
-						#self.fit_action()
+						#do fit action in a new thread, so we don't block updates
 						update_thread = t.Thread(target=self.fit_action)
 						#start as daemon thread, so ending main event loop will not wait for join 
 						update_thread.daemon = True
@@ -571,7 +584,8 @@ class SliServer():
 					except Exception as e:
 						print(f"probelm fitting ... \n{e}" )
 				
-				time.sleep(0.05)
+				#sleep for a short amount of time, save a little CPU
+				time.sleep(0.033)
 			
 			except KeyboardInterrupt:
 				print(f"Error in event loop ... disconnecting .....")
@@ -581,8 +595,10 @@ class SliServer():
 		
 
 def main():
+	"""!Main loop
+	"""
 	# Create an ArgumentParser object
-	parser = argparse.ArgumentParser(description="SLI Server ")
+	parser = argparse.ArgumentParser(description="Sli Server ")
 	
 	# Add arguments
 	parser.add_argument('-host', type=str, help='host to start the server', required=False)
@@ -598,7 +614,6 @@ def main():
 	
 	# Create an instance of ConfigParser
 	config = configparser.ConfigParser()
-	#config = configparser.RawConfigParser( allow_unnamed_section=True )
 	# Read from the configuration file
 	config.read(config_file)
 	
@@ -620,15 +635,15 @@ def main():
 	
 	print(f"Hello, starting server at host = {host} at port={port}")
 	
-	#connect to host and ports
+	#create server object
 	server = SliServer(config, host , port)
 	
+	#start main event loop
 	server.process()
 	
 
 if __name__ == "__main__":
     try:
-        #asyncio.run( main() )
         main()
     except KeyboardInterrupt:
         print("\nServer shut down.")
