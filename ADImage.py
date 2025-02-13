@@ -1,62 +1,52 @@
+##
+# @file ADImage.py
+# @brief Enscapsilation of an AreaDetector Image
+# AreaDetector is a an EPICS package that is used to provide an EPICS framework
+# for image detectors. This file will handle common operations to interact
+# with it's image array, which comes as a 1D EPICS waveform. Also provides 
+# class to contain a collection of image objects 
+
 import numpy as np
 from PIL import Image
-#import cv2 as cv
-#print("open cv version" + cv.__version__)
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 
 
-
-"""
-
-Container for Image Data
-
-This should be responsible for updating its own plots
-
-"""
-
 class ADImage():
-	x_size=0
-	y_size=0
-	uid=0
-	dtype=""
-	max_pix_val=255
+	"""!ADImage class is the main container that will hold data from the area detector image
+	
+	"""
 	
 	def __init__(self , x_size, y_size , array_data , uid=None , max_pix_val=None ):
+		"""!Constructor takes in the x and y sizes and data array
+		@param x_size - the horizontal size of the image
+		@param y_size - the vertical size of the image
+		@param array_data - is the 1D or 2D image array
+		@param uid - an optional id for the image
+		@param max_pix_val - optional max pixel value
 		
+		"""
+		# if uid or max_pix_val is not None then set the parameters
 		if uid is not None:
 			self.uid = uid
+		else:
+			self.uid = ""
+			
 		if max_pix_val is not None:
 			self.max_pix_val = max_pix_val
 			print("MAX PIX VAL = "+str(self.max_pix_val))
+		else:
+			self.max_pix_val = 255 # 8-bit image default
 		
-		#check the shape of array_data, if size 2 then it is a 2d array
-		if len(array_data.shape)  == 2 :
-			self.x_size=array_data.shape[1]
-			self.y_size=array_data.shape[0]
-			self.size=( self.x_size , self.y_size )
-			self.img_arr_2d = np.array( array_data)
-			self.array_data = self.img_arr_2d.flatten()
-		else: #this is a 1d array
-			self.x_size=x_size
-			self.y_size=y_size
-			self.size=( x_size , y_size )
-			self.array_data = np.array( array_data )
-			self.set_img_arr_2d(self.array_data)
-		
-		#set profiles
-		self.set_x_profile()
-		self.set_y_profile()
-		
-		#np arrays to use for plotting
-		self.xdata = np.arange(self.x_size)
-		self.ydata = np.arange(self.y_size)
+		#set the array
+		self.set_array(array_data , x_size , y_size)
 		
 		
 
 	def print_image_params(self):
-		print("x size = " + str( self.x_size ))
-		print("y size = " + str( self.y_size ))
+		"""!Print the parameters"""
+		print("x size = " + str( self._x_size ))
+		print("y size = " + str( self._y_size ))
 		print("array data = " + str( self.array_data ))
 		print("unique id = " + str( self.uid ))
 		print("x_profile length = " + str( len( self.x_profile ) ))
@@ -70,27 +60,60 @@ class ADImage():
 		print("***********************************************************")
 		
 
-	def set_array(self , array_data):
-		self.array_data = array_data
-		self.set_img_arr_2d(self.array_data)
+	def set_array(self , array_data , x_size , y_size):
+		"""!Set the array data 
+		Function looks at the shape of the array, and decides if it is already
+		A 1D or 2D array, then sets the class members accordingly 
+		
+		"""
+		
+		#check the shape of array_data, if size 2 then it is a 2d array
+		if len(array_data.shape)  == 2 :
+			self._x_size=array_data.shape[1]
+			self._y_size=array_data.shape[0]
+			##tuple of size, useful for making an PIL image
+			self._size=( self.x_size , self.y_size )
+			self.img_arr_2d = np.array( array_data)
+			self.array_data = self.img_arr_2d.flatten()
+		else: #this is a 1d array
+			self._x_size=x_size
+			self._y_size=y_size
+			##tuple of size, useful for making an PIL image
+			self._size=( x_size , y_size )
+			self.array_data = np.array( array_data )
+			self.set_img_arr_2d(self.array_data)
+		
+		#set profiles, sum of horizontal and vertical columns
+		self.set_x_profile()
+		self.set_y_profile()
+		
+		#np arrays to use for plotting
+		self.xdata = np.arange(self._x_size)
+		self.ydata = np.arange(self._y_size)
+		
 			
-	def set_x_size(self , x_size):
-		self.x_size = x_size
+	def get_x_size(self ):
+		"""!getter for x_size"""
+		return self._x_size
 
-	def set_y_size(self , y_size):
-		self.y_size = y_size
+	def get_y_size(self):
+		"""!getter for y_size"""
+		return self._y_size
 	
-	def set_uid(self , uid):
-		self.uid = uid
+	def get_uid(self):
+		"""!getter for uid"""
+		return self.uid
 	
 	def set_img_arr_2d(self, array_data):
-		if ( array_data is not None) and (self.x_size is not None ) and ( self.y_size is not None ):
-			self.img_arr_2d = array_data.reshape(  int( self.y_size) , int( self.x_size ) )
+		"""!Set a 2D array, from a 1D array """
+		if len(self.array_data.shape)  == 1 :
+			self.img_arr_2d = array_data.reshape(  int( self._y_size) , int( self._x_size ) )
 			#print(self.img_arr_2d)
 			
 	
 	def set_x_profile(self, x_profile = None):
-		if (x_profile is not None) and len(x_profile) == ( x_size ):
+		"""!Set the x profile from the image array, optionally use this to set the profile"""
+		if (x_profile is not None) and len(x_profile) == ( self._x_size ):
 			self.x_profile = x_profile
 		else:
 			#self.x_profile =   np.sum( self.img_arr_2d , axis=0 ) / self.max_pix_val
@@ -102,11 +125,12 @@ class ADImage():
 		#print(str(peaks))
 		#find valleys by inverting the data
 		self.x_valleys, _ =sig.find_peaks(-self.x_profile)	
-		
+		#set the max value of the profile
 		self.set_x_profile_max()
 			
 	def set_y_profile(self, y_profile = None):
-		if (y_profile is not None) and len(y_profile) == ( y_size ):
+		"""!Set the y profile from the image array, optionally use this to set the profile"""
+		if (y_profile is not None) and len(y_profile) == ( self._y_size ):
 			self.y_profile = y_profile
 		else:
 			self.y_profile =   np.sum( self.img_arr_2d , axis=1 ) / self.max_pix_val
@@ -115,10 +139,11 @@ class ADImage():
 		#print(str(peaks))
 		#find valleys by inverting the data
 		self.y_valleys, _ = sig.find_peaks(-self.y_profile)		
-		
+		#set the profile max value
 		self.set_y_profile_max()
 	
 	def set_x_profile_max(self):
+		"""!set the max number for the x profile, and the index it is found"""
 		if(self.x_profile is not None) and (self.x_peaks is not None):
 			self.x_max_val = np.max(self.x_profile[self.x_peaks])
 			self.x_max_index = self.x_peaks[0]
@@ -129,6 +154,7 @@ class ADImage():
 			#print( "MAX X = " + str( self.x_max_val ) + ",  MAX X INDEX =" + str(self.x_max_index))
 	
 	def set_y_profile_max(self):
+		"""!set the max number for the y profile, and the index it is found"""
 		if(self.y_profile is not None) and (self.y_peaks is not None):
 			self.y_max_val = np.max(self.y_profile[self.y_peaks])
 			self.y_max_index = self.y_peaks[0]
@@ -139,12 +165,17 @@ class ADImage():
 			#print( "MAX Y = " + str( self.y_max_val ) + ",  MAX Y INDEX =" + str(self.y_max_index))
 	
 	def get_x_profile(self):
+		"""!getter for the x profile"""
 		return self.x_profile
 		
 	def get_y_profile(self):
+		"""!getter for y profile"""
 		return self.y_profile
 	
 	def save_2d_to_image(self , path=None):
+		"""!Save the 2d array to an image, this one still needs some work
+		@param path - path to where we want to save the image 
+		"""
 		p="./"
 		if path is not None:
 			p=path
@@ -155,8 +186,8 @@ class ADImage():
 		im.save(p+name+".jpg" )
 		
 	def xplot(self):
-		
-		
+		"""!Save the x profile to a png image.
+		"""
 		plt.cla()
 		plt.plot(self.xdata, self.x_profile)
 		plt.plot(self.x_peaks, peaks, self.x_profile[self.x_peaks], 'o')
@@ -166,7 +197,8 @@ class ADImage():
 
 	
 	def yplot(self):
-		
+		"""!Save the y profile to a png image.
+		"""
 		
 		plt.cla()
 		plt.plot(self.ydata, self.y_profile)
@@ -175,92 +207,69 @@ class ADImage():
 		plt.savefig("./data/yplot_"+str(self.uid)+".png")
 	
 
-"""
-class to store a collection of ADImages
-""" 
 class ADImageCollection():
 	
+	"""!Convience class to store ADImages and perform Operations on set of them
+	"""
+	
+	##array counter
 	counter=0
 	
 	def __init__(self):
-		
+		"""! Initiate a list object to store images
+		"""
 		self.ad_collection = list()
 		
 	def add(self, ad_image):
+		"""!Add an ADImage to the collection"""
 		self.ad_collection.append( ad_image )
-		#ad_image.print_image_params()
+		#increment the image counter
 		self.counter=self.counter+1
-		#if(self.counter<5):
-			#ad_image.save_2d_to_image("./images/") 
-		#print("______________________________________________")
+		
 	
 	def clear(self):
-		self.length = len(self.ad_collection)
+		#clear the list
+		#self.length = len(self.ad_collection)
 		self.ad_collection.clear()
-		#print( "Before clear = "+str(length) + " , ADImageCOllection cleared length now = " + str(len(self.ad_collection)) )
-	
-	"""
-	
-	calculate an average of the 2d arrays 
-	
-	"""
-	def average(self):
-		#need to ensure that each 2d array has the same size then average them
-		arr = list()
-		num_non_zero = 0
 		
-		#make an array of 2d arrays
+	
+	
+	def average(self):
+		"""!This function will average the arrays in the collection
+		@return an average image, as an ADImage object
+		"""
+		
+		self.arr = list()
+		self.num_non_zero = 0
+		
+		#make an array of image arrays
 		for i,img in enumerate( self.ad_collection ):
-			if(img.array_data is not None) and (np.any(img.array_data)):
-				arr.append(img.array_data)
-				num_non_zero = num_non_zero + 1
-				#print( "adding into array ... " + str( img.array_data ) )
+			if(img.array_data is not None) and (np.any(img.array_data)): 
+				self.arr.append(img.array_data)
+				self.num_non_zero = self.num_non_zero + 1
 		
 		#changing the data type here is important, as it will limit the to 8 bit int values
-		avg_arr = np.array( arr[0] , dtype=float)
-		n = len(arr)
+		#need to change this to a more dynamic method for figuring out the type
+		self.avg_arr = np.array( self.arr[0] , dtype=float)
 		
-		#print("n = " + str(n))
-		#print("num_non_zero = " + str(num_non_zero))
-		
-		
-		for i , arr_1d in enumerate(arr):
+		#iterate through the array and add them up
+		for i , arr_1d in enumerate(self.arr):
 			if i > 0: 
-				# ~ print("i in loop = " + str(i) )
-				# ~ print("max in the current = " + str(np.max( arr[i] ))) 
-				# ~ print("max in the avg = " + str(np.max( avg_arr ))) 
-				tmp = np.array( avg_arr )
-				avg_arr = arr[i] + tmp 
-				#avg_arr =  sum_arr + avg_arr
+				tmp = np.array( self.avg_arr )
+				self.avg_arr = self.arr[i] + tmp 
 				
-				#print( "array 1d "+ str( arr_1d ) )
-				#print( "avg array "+ str( np.max( avg_arr ) ) )
-		
-		#self.avg_2d = ( avg_arr / n )
-		self.avg_1d = avg_arr/num_non_zero
-		self.x_size = 0
-		self.y_size = 0
-		
-		#print("MAX in avg = " + str( np.max(avg_arr) ))
-		#print("MIN in avg = " + str( np.min(avg_arr) ))
-		#print("MAX in avg_1d = " + str( np.max(self.avg_1d) ))
-		#print("MIN in avg_1d = " + str( np.min(self.avg_1d) ))
-		
-		#for x in avg_arr:
-			#print(x)
-		
-		if(len( self.ad_collection) > 0):
-			self.x_size = self.ad_collection[0].x_size
-			self.y_size = self.ad_collection[0].y_size
-		
-			#print("avg arr" + str( avg_arr ) )
-			#print("avg 1d array" + str( self.avg_1d ) )
-		
-			#put 2d profile in an adimage
-			self.ad_avg_img = ADImage(self.x_size , self.y_size , self.avg_1d  )
+	
+		#if there was more than 1, then give the average else return the 1st element
+		if(len( self.ad_collection) > 1):
+			self.x_size = self.ad_collection[0].get_x_size()
+			self.y_size = self.ad_collection[0].get_y_size()
+			#set the average
+			self.avg_1d = self.avg_arr/self.num_non_zero
 			#self.ad_avg_img.print_image_params() 
-			return self.ad_avg_img 
-		
+			return ADImage(self.x_size , self.y_size , self.avg_1d  )
+		else:
+			
+			return self.ad_collection[0]
 		
 	
 		
