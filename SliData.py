@@ -7,7 +7,11 @@
 # This file will hold the model information for a diffraction pattern
 # and provide functions for fitting
 # 
-
+# Much of this was content was parsed from papers and the old SLI C code, written by 
+# Pavel Chestov.  
+#
+# Will use the lmfit python package to do least squares fitting
+# 
 
 
 import numpy as np
@@ -190,21 +194,24 @@ class SliData():
 	Yi = IN + I0 * (sinc(A*(Xi-B)/pi)**2) * ( 1 + V * cos(D*(Xi-B)-F) )
 	"""
 	#fit parameters
-	V = 0 ##visibility parameter 
-	A = 0 #depends on slit size
-	B = 0 # shift of interferogram and image axis, depends on slit size
-	IN = 0 #background intensity
-	I0 = 0 #background intensity of SR source
-	F = 0 #Phi or phase difference of the light reaching the slits, depends on size
-	D = dist_slits #depends on slit dist
+	##visibility parameter 
+	V = 0 
+	##depends on slit size
+	A = 0 
+	##shift of interferogram and image axis, depends on slit size
+	B = 0 
+	##background intensity
+	IN = 0 
+	##background intensity 
+	I0 = 0
+	##Phi or phase difference of the light reaching the slits, depends on size 
+	F = 0 
+	##depends on slit dist
+	D = dist_slits 
 	
+	#variable to show that if the fit was bad or good
 	relibility = False
 	
-	"""
-	dist_slits = the distance between the slits. 
-	R = The distance from the SL source and the slits
-	probably should get the initial parameters from config file, then perhaps EPICS
-	"""
 	def __init__(self, profile_array=None, dist=None, expected_es=None  ):
 		"""!Init the SliData Object
 		@param profile_array optional array to start
@@ -227,6 +234,7 @@ class SliData():
 		@param optionally set the slit distnace parameter
 		"""
 		
+		#if dist_slits is included then set it
 		if dist_slits is not None:
 			self.dist_slits = dist_slits
 		
@@ -254,18 +262,23 @@ class SliData():
 		self.etax = etax
 		self.sigx = sigx
 		
+		#calculate the size due to the emittance
 		self.sigma_emit = self.calc_sigma_beta_x( self.emitx , self.betax  )
 		
-		#from parameters	
+		#from parameters
 		self.sigma_beam = self.calc_sigma_beam( self.V , self.dist_slits , self.R , self.lam )
+		
 		#size from design dispersion
-		self.sigma_disp_design = self.calc_sigma_dispersion( sigx , self.sigma_emit  )
+		self.sigma_disp_design = self.calc_sigma_dispersion( self.sigx , self.sigma_emit  )
+		#beam size due to dispersion
 		self.sigma_disp = self.calc_sigma_dispersion( self.sigma_beam , self.sigma_emit  )
 		
-		self.espread = self.calc_espread(self.sigma_disp , etax)
-		self.espread_design = self.calc_espread(self.sigma_disp_design , etax)
+		#now calculate the energy spread
+		self.espread = self.calc_espread(self.sigma_disp , self.etax)
+		self.espread_design = self.calc_espread(self.sigma_disp_design , self.etax)
 		
-		#need to estimate error
+		#****TODO**** 
+		#- need to still estimate error
 		self.espread_err = 0;
 		
 		#expected e_spread
@@ -274,6 +287,7 @@ class SliData():
 		else:
 			self.expected_es = self.espread_design
 		
+		#if the expected is included, calculate the error from the expected
 		self.error_is_espread = abs(  self.expected_es - self.espread )	
 			
 		# ~ print(" ---------------------------------------")
@@ -332,11 +346,17 @@ class SliData():
 		
 		return dt
 		
-	#return the parameter object with initial bounds and guesses
+	
 	def set_initial_model_params(self , profile_arr , paramaters=None):
-		#first take in parameter, and set my values to the values 
+		"""!This function will take an intelligent guess at initial parameters
+		This will likley need tweaking along the way
+		@param profile_arr the profile array of the image
+		@param parameters optional argument is lmfit.Parameter object
+		@return the lmfit.Parameter object with guesses and bounds
+		"""
 		
-		#set the profile array for this model
+		#set the profile array for this model, ensure that the numpy array data type is set for 
+		#max possible value
 		self.profile_array = np.array( profile_arr , dtype= self.get_data_type(profile_arr) )
 		
 		#set x data array
@@ -351,11 +371,17 @@ class SliData():
 		
 		#set Imin to the average of the first two minumums around the center of mass
 		self.Imin =  (self.v_left_val + self.v_right_val)/2
+		#set the visibility
 		self.V  = self.calc_visibility( self.Imax , self.Imin )
+		#set the background level
 		self.IN = self.set_background(profile_arr , self.max_index)
+		#set the intensity
 		self.I0 = self.set_sr_intensity(  self.Imax , self.IN , self.V  )
+		#set A
 		self.A = self.set_A( self.dist_slits , self.v_left_index , self.v_right_index )
+		#B is set to the center of mass
 		self.B = center_of_mass(self.profile_array)
+		#set D based on the slit distance
 		self.D = (self.A * self.dist_slits)*2 
 		
 		#~ print("Imin estimate = " + str(self.Imin) )
@@ -366,13 +392,13 @@ class SliData():
 		#~ print("B = " + str(self.B))
 		#~ print( "D = " + str( self.D ) )
 		
-		#F is the phase offset
+		#F is the phase offset, may try to add a clever guess eventually
 		self.F = 0 # just set this to zero at first
-		#G is the offset of the signal
+		#G is the offset of the signal, may or may not need this param
 		self.G = 0 # just set this to zero at first
 		
 		
-		#create parameters
+		#create parameters, this is an lmfit.Parameter object with initial bounds
 		params = Parameters()
 		params.add( 'IN' , self.IN , min=None , max=self.I0)
 		params.add( 'I0' , self.I0 , min =None , max=self.I0*10)
@@ -385,7 +411,16 @@ class SliData():
 		
 		return params
 	
-	def get_signifigance_level(self, alpha , param , param_err , dof ):
+	def get_signifigance_level(self, alpha=0.05 , param , param_err , dof ):
+		"""!Uses the scipy.stats library to find the signafigance level of the parameter
+		@param alpha is the alpha to use, default and standard is 0.05
+		@param param is the parmeter that we need to get the pvalue
+		@param param_err is te parameter error
+		@param dof is the degrees of freedom 
+		@return fit_good boolean to indicate if fit was gooe
+		@return t_stat the t statistic for the parameter fit
+		@return p_value is the p value for fit
+		 """
 		if param is not None and param_err is not None:
 			t_stat = param / param_err
 			p_value = 2 * stats.t.sf(abs(t_stat), df=dof )
@@ -403,9 +438,16 @@ class SliData():
 		#print("T Stat = " + str(t_stat) )
 		#print("P Val = " + str(p_value) )
 		
+		#return boolean fit_good, t_stat, and p_value
 		return fit_good , t_stat , p_value
 	
 	def set_params_to_optimized(self, params):
+		"""! This function will be responsible for setting the class parameters to 
+		the optimized parameters. Also, will calculate the p_value and t_stat 
+		for the relivant parameters
+		@param params the lmfit.Parameter objects
+		
+		"""
 		
 		self.params_opt = params
 		
@@ -435,6 +477,12 @@ class SliData():
 		
 	
 	def set_peaks( self , profile_arr ):
+		"""!Find the peaks in the ydata
+		@param profile_arr is the profile array of the image
+		@return peaks the array of peaks found
+		@return max_val the max value in the peaks array
+		@return max_index the index in the array where to find the max_val
+		"""
 		#find peaks in ydata
 		peaks, _ = sig.find_peaks( profile_arr, prominence=0.3, width=3 )
 		#max_value in peaks
@@ -443,7 +491,7 @@ class SliData():
 		#index of the max, start at zero 
 		max_index = peaks[0]
 		
-		#iterate through and then retun the max_index
+		#iterate through and then set the max_index
 		#save the index off the max pixel	
 		for index in peaks:
 			if profile_arr[index] == max_val:
@@ -454,6 +502,16 @@ class SliData():
 		
 	
 	def set_valleys( self , profile_arr ):
+		"""!Find the valleys in the ydata
+		@param profile_arr is the profile array of the image
+		@return valleys the array of valleys found
+		v_left_val , v_left_index , v_right_val, v_right_index 
+		@return  v_left_val is the value of the first valley left of the peak
+		@return  v_lef_index is the index of the first valley left of the peak
+		@return  v_right_val is the value of the first valley right of the peak
+		@return  v_right_index is the index of the first valley right of the peak
+		
+		"""
 		#find valleys by inverting the data
 		valleys, _ =sig.find_peaks(-profile_arr, prominence=0.3, width=3)	
 		
@@ -491,6 +549,14 @@ class SliData():
 			
 		
 	def fit_max_min_array_to_gaussian(self, profile_arr, max_array, min_array):
+		"""!Fit both the max and min or peaks and valleys arrays to a gaussian
+		This is not used yet, but may be useful to guess fit bounds better
+		or calculate the Imax and Imin values
+		@param profile_arr profile array of the image 
+		@param max_array array of peaks in data
+		@param min_array array of valleys in data
+		@return the results arrays
+		"""
 		
 		#rely on that this an array of indexes returned by scipy.signal.find_peaks()
 		xdata_max = max_array
@@ -555,18 +621,16 @@ class SliData():
 		#print( "After Gauss Fit; Imax = " + str( result_max.params['amp'] ) + ", Imin = " + str(result_min.params['amp']) )
 		
 		
-		return ( result_max , result_min )
-		#return [ "MaxParams" : result_max.params ]
-		
+		return ( result_max , result_min )		
 		
 			
 	def calc_visibility(self , Imax , Imin):
-		#estimate of visibility
-		# ~ if Imax is not None:
-			# ~ self.Imax = Imax
-		# ~ if Imin is not None:
-			# ~ self.Imin = Imin
-		
+		"""!Estimate the visibility parameter
+		@param Imax the value of the peak of the difraction pattern model
+		@param Imin the value of the amplitude of the minimum of the diffraction patterns
+		@retrun v the visibility estimate
+		"""
+	
 		#estimate the visibility 	
 		v = (Imax - Imin) / (Imax + Imin)
 		
@@ -577,26 +641,22 @@ class SliData():
 	beam size = [(lambda * R) / (pi* dist_slits)]*sqrt( 0.5*ln(1/V) ) 
 	"""	
 	def calc_sigma_beam( self , V , dist_slits , R , lam ):
-		# ~ if dist_slits is not None:
-			# ~ self.D = dist_slits
-		# ~ if R is not None:
-			# ~ self.R = R
-		# ~ if lam is not None:
-			# ~ self.lam = lam
-		# ~ if V is not None:
-			# ~ self.V = V
+		"""! Use the parameters to calculate the beam size
+		@param V is the visibility parameter
+		@param dist_slits distance of the slits
+		@param R the distance from the the detector to the SL source.
+		@param lam is the wavelength of light, which is set by the bandpass filter 
+		@return sigma_beam the total beam size
+		"""
 		
-		#self.coeff = (( self.lam * self.R  ) / ( math.pi * self.dist_slits ))*np.sqrt(0.5)
-		#self.sigma_est = self.coeff * np.sqrt( np.log(1/self.V) )
+		return ( ( lam * R) / ( math.pi * dist_slits) ) * np.sqrt( 0.5 * np.log( 1 / V ) ) 
 		
-		sigma_est = ( ( lam * R) / ( math.pi * dist_slits) ) * np.sqrt( 0.5 * np.log( 1 / V ) ) 
-		
-		return sigma_est
-		
-	#def set_e_spread(self):
-		
-	
 	def set_background(self , profile_arr , split_val ):
+		"""!Set the background level. This may need some tweaking
+		doing stuff here that is not used yet, but may be useful for improving this
+		@param profile_arr is the profile array of the image
+		@param split_val is where to spilt the array
+		"""
 			
 		#split the profile array into 2 parts at the max
 		arr1,arr2 = np.split(profile_arr , [split_val])
@@ -620,7 +680,6 @@ class SliData():
 		
 		mean , noise = calc_noise( profile_arr )
 		
-		
 		#print("IN = " + str(IN) )
 		#print("noise = " + str(noise) )
 		
@@ -628,30 +687,44 @@ class SliData():
 	
 	"""
 	set the estimate of IN, or just set the value and return
-	(max value - background) / (1 + Visibility)
+	
 	"""	
 	def set_sr_intensity(self , max_val , noise , V  ):
-		
+		"""!Set the SR intensity or I0 
+		(max value - background) / (1 + Visibility)
+		@param max_val is the max value in the profile array
+		@param noise is the noise floor of the profile array
+		@param V is the visibility parameter
+		"""
 		
 		I0 = ( ( max_val - noise ) / ( 1 + V) )
 		
+		#return the absoluty value of the calculated value
 		return abs( I0 )	
-	"""
-	estimate or set the value of the coeficent A
-	(2*pi)/(( 2*dist_slits-1 )* width_first_peak)
-	"""
+	
 	def set_A(self , dist , left_index , right_index ):
-		
-		A=0
+		"""!Estimate or set the value of the coeficent A, this is based on 
+		the estimated width of the highest peak
+		(2*pi)/(( 2*dist_slits-1 )* width_tallest_peak)
+		@param dist distance of the slits
+		@param left_index is the index of the first left valley
+		@param right_index is the index of the first rigth valley
+		@return the estimated value of A, or zero
+		"""
 		try:
+			#error trapping because divide by zero is possible
 			A = ( 2*math.pi ) /( ((2 *  dist )-1)*( right_index - left_index ) )
 		except:
 			print( "ERROR occured in calculating A, return 0")
-		#A = ( 2*math.pi / dist - 0.5 )*( right_index - left_index ) 
+			A=0
 		
 		return A	
 	
 	def set_B( self, B=None  ):	
+		"""!Set the value of B parameter, this is just the max_value of the tallest peak
+		@param B optionally just set and return the value of B
+		@return the value of B
+		"""
 		if B is not None:
 			self.B = B
 			return B;
@@ -663,6 +736,11 @@ class SliData():
 		return self.B
 		
 	def calc_sigma_beta_x(self , emit=None , betax=None ):
+		"""!calculate the size due to beta and emittance
+		@param emit optionally take in and set the emittance twiss parameter
+		@param betax optionally take in the beta twiss parameter value
+		@return sigma_betax return the beam size due to dispersion
+		"""
 		if emit is not None:
 			self.emit = emit
 		if betax is not None:
@@ -671,35 +749,71 @@ class SliData():
 		sigma_beta = np.sqrt(  self.emitx * self.betax )
 		#print("Sigma Beta Size = " + str(sigma_beta))
 		return sigma_beta
-		
+	
+	
 	def calc_sigma_dispersion(self , sigma_beam , sigma_emit ):
+		"""!calculate the size due to dispersion
+		@param sigma_beam the total beam size
+		@param sigma_emit claculated size due to beta and the emittance
+		@return sigma_dispersion beam size due to dispersion
+		"""
 		sigma_disp = np.sqrt( abs( sigma_beam**2 - sigma_emit**2 ) )
 		#print("Sigma From Dispersion = " + str(sigma_disp) )
 		return sigma_disp
 	
 	def calc_espread(self, sigma_disp , disp):
+		"""!Calculate the energy spread
+		@param sigma_disp is the beam size due to dispersion
+		@param disp is the dispersion or eta twiss parameter
+		@return espread the energy spread
+		"""
 		espread= abs( sigma_disp/disp )
 		#print("ESpread = " + str(espread))
 		return abs( espread )	
 	
 	def back_calc_visibility(self , slit_dist, lam , R , sigma):
+		"""!Back calculate the visibility based on other parameters. 
+		@param slit_dist is the distance of the slits
+		@param lam is the wavelength from the bandpass filter
+		@param R is the distance from camera sensor to the SR that is imaged
+		@param sigma is the total beam size
+		@return visibility 
+		"""
 		visibility = 1 / np.exp( (2 * math.pi**2 * slit_dist**2 * sigma**2) / (lam**2 * R**2  ) )
 		#print("Back Calculated Visibilty = " + str(visibility))
 		return visibility
 		
 	
 	def back_calc_Imin_from_V(self , Imax , V):
+		"""!Back calculate the Imin from the visibility parameter
+		@param Imax the max value of the tallest peak or the top of the diffration fit
+		@param V is the visibility parameter
+		@return Imin
+		"""
 		Imin = Imax*(1-V)/(1+V)
 		#print( "Backcalculated Imin = " + str(Imin) )
 		return Imin 
 	
 	def calc_chi_sq(self , profile_arr , result):
+		"""!Calculate the reduced chi squared. This should go into the relibility value
+		This needs some work
+		@param profile_arr is the profile array of the image
+		@param is the result array from the fit
+		"""
 		 mi = lmfit.minimize(residual, p)
 		 dof = len(x) - ndim
 		 chi2 = sum(residual(p) ** 2) / dof
 		
 	
 	def fit_diff_model(self , params , profile_arr , xdata  ):
+		"""!Use this function to fit the diffraction model using a minimization model
+		@param params is the lmfit.Parameter object used for the fit
+		@param profile_arr the profile of the image array
+		@param xdata is the x value array
+		@return the result array
+		@return the chi squared 
+		@return the new parameter object from optimized parameter 
+		"""
 		mi = Minimizer( diff_model_min , params, fcn_args=(xdata, profile_arr) )
 		
 		#get the MinimizerResult object
@@ -726,36 +840,48 @@ class SliData():
 	
 	#getters
 	def get_espread(self):
+		"""!Get the energy spread and assume *10^-5
+		"""
 		return (self.espread*10**(5))
 	
 	def get_sigma_total(self):
+		"""!get sigma beam"""
 		return self.sigma_beam
 	
 	def get_sigma_twiss(self):
+		"""!get sigma emittance"""
 		return self.sigma_emit
 		
 	def get_sigma_disp(self):
+		"""!get sigma dispersion"""
 		return self.sigma_disp
 	
 	def get_espread_err(self):
+		"""!get energy spread"""
 		return self.espread_err
 	
 	def get_reliability(self):
+		"""!get relibility"""
 		return self.relibility
 	
 	def get_visibility(self):
+		"""!get visibility"""
 		return self.V
 	
 	def get_visibility_err(self):
+		"""!get visibility error"""
 		return self.V_err
 	
 	def get_xdata(self):
+		"""!get x values"""
 		return self.xdata
 		
 	def get_profile_array(self):
+		"""!get the profile array"""
 		return self.profile_array
 
 	def get_result_array(self):
+		"""!get the result array"""
 		return self.final
 	
 	def plot(self , save_path=None , title=None , xlabel=None , ylabel=None):
