@@ -11,7 +11,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 
-
 class ADImage():
 	"""!ADImage class is the main container that will hold data from the area detector image
 	

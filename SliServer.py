@@ -1,5 +1,6 @@
-#!/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
 #!/home/brian/venv/bin/python3
+#/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
+
 
 ##
 # @mainpage SliServer Project
@@ -14,7 +15,7 @@
 #
 
 ##
-# @file server.py
+# @file SliServer.py
 # @brief This file will be the main entry point to the server. 
 # @author Brian Freeman
 # @par Revision History:
@@ -39,7 +40,7 @@ from epics import ca
 
 #local imports
 import SliData as sli
-import ad_image as ad
+import ADImage as ad
 
 ## default config file
 config_file = "./server.cfg"
@@ -244,8 +245,8 @@ class SliServer():
 		#initilize the channel access library 
 		ca.initialize_libca()
 		
-		#attempt to set ca_max_array_bytes
-		num_bytes = 10000000000000000000000000000000
+		#attempt to set ca_max_array_bytes, this is likely not best done here
+		num_bytes = 10000000000000000
 		ca.max_array_bytes = num_bytes
 		os.environ['EPICS_CA_MAX_ARRAY_BYTES'] = str(num_bytes)
 	
@@ -285,6 +286,8 @@ class SliServer():
 		
 		for key,value in self.all_pvs.items():
 			if value.connected:
+				#print for debug
+				#print(f"{value.pvname} is {value.get()}")
 				continue
 			else:
 				print(f"PV {value.pvname} seems disconnectd")

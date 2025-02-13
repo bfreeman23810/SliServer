@@ -1,6 +1,14 @@
 #!/home/brian/venv/bin/python3
 #!/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
 
+##
+# @file SliData.py
+# @section sli_data_description Description:
+# This file will hold the model information for a diffraction pattern
+# and provide functions for fitting
+# 
+
+
 
 import numpy as np
 import scipy as sp
@@ -8,7 +16,7 @@ import math
 from lmfit import Model, Minimizer, Parameters, report_fit
 from scipy.optimize import curve_fit
 import pandas as pd
-import ad_image as ad
+import ADImage as ad
 import scipy.signal as sig #useful for peak finding 
 import matplotlib.pyplot as plt
 import tifffile
@@ -17,191 +25,39 @@ import scipy.stats as stats
 import os
 
 
-###########################################################################
-#### Calculate the noise average and standard deviation of 1st N points.
-#### 
-###########################################################################
-def calc_noise(start_pt, YS, N):
-	start = start_pt
-	end = start_pt + N + 1
-	if(end >= len(YS) and len(YS) > 2):
-		end = len(YS)-1
-		start = end-2
-	return np.mean(YS[start:end]), np.sqrt(np.var(YS[start:end], ddof=1))
+
+def calc_noise( arr ):
+	"""! Calcualte the mean and the noise in the arr 
+	@return mean , and the standard deviation of the array
+	"""
+	return np.mean(arr), np.sqrt(np.var( arr, ddof=1) )
 
 
-########################################################################
-# Calculate the initial estimate for the 'c' parameter offset based on
-# the mean and range of the lower of the two noise levels.  Also returns
-# the noise data on which these were based.
-# The bounds are 2.5 to 97.5 percentiles of the data.
-# YG         subset of the global data that was originally partitioned
-#            to contain the peak
-# fit_start  index of YG where the data used for fitting starts
-# fit_end    index of YG where the data used for fitting ends
-# npts_noise number of data points used in noise calculations
-########################################################################
-def calcCEstimateAndBounds(YG, fit_start, fit_end, npts_noise):
-    data_start = 0
-    data_end = len(YG)
-
-    # The "halfwidth" or threshold "filters" in findplots may trim the sides of
-    # the fitted data range.  If so, take the noise to be from outside of the
-    # fitted area without exiting the data.
-    startl = max(data_start, fit_start - npts_noise)
-    endl = startl + npts_noise
-    endr = min(data_end, fit_end + npts_noise)
-    startr = endr - npts_noise
-    noisel = YG[startl:endl]
-    noiser = YG[startr:endr]
-
-    # Take your initial c estimate to be the average of the noise on the side
-    # with the lower noise mean, and used the trimmed noise to be the upper
-    # and lower bounds on the c value
-    meanl = np.mean(noisel)
-    meanr = np.mean(noiser)
-
-    mean = lb = ub = noise = None
-    if (meanr < meanl):
-        mean = meanr
-        lb = np.percentile(noiser, 2.5)
-        ub = np.percentile(noiser, 97.5)
-    else:
-        mean = meanl
-        lb = np.percentile(noisel, 2.5)
-        ub = np.percentile(noisel, 97.5)
-
-    # Sometimes the "noise" has very little variability and the bounds don't make
-    # any sense.  In this case, variance calculation may have problems, so
-    # use a very simple bounding scheme.
-    if (lb >= ub or lb >= mean or ub <= mean):
-        lb = mean * 0.9
-        ub = mean * 1.1
-
-    return mean, lb, ub, noisel, noiser
-    
-
-###############################################################################
-#### Fitting using lmfit methods: fits 1 Gaussian to data containing 1 peak.
-###############################################################################
-def fit_LM(x, y, e, p0, s, ndim, c_lb, c_ub):
-    global xv, yv, ev
-    [xv, yv, ev] = [x, y, e]
-    # -----------------------------------------------------------------------
-    # Set up the initial guess and the ranges of each parameter of the fit
-    # -----------------------------------------------------------------------
-    p = lmfit.Parameters()
-    p.add_many(('A', p0[0], True, p0[0] / s, p0[0] * s, None),
-               ('mu', p0[1], True, p0[1] / s, p0[1] * s, None),
-               ('sigma', p0[2], True, p0[2] / s, p0[2] * s, None),
-               ('c', p0[3], True, c_lb, c_ub, None))
-    # -----------------------------------------------------------------------
-    # Call the routine lmfit to minimize residuals. Comptue chi2
-    # -----------------------------------------------------------------------
-    mi = lmfit.minimize(residual, p)
-    dof = len(x) - ndim
-    chi2 = sum(residual(p) ** 2) / dof
-    ps = np.zeros(10)
-    ps[0] = mi.params['A'].value
-    ps[1] = mi.params['A'].stderr
-    if (math.isnan(ps[1])):
-        ps[1] = 0
-    ps[2] = mi.params['mu'].value
-    ps[3] = mi.params['mu'].stderr
-    if (math.isnan(ps[3])):
-        ps[3] = 0
-    ps[4] = mi.params['sigma'].value
-    ps[5] = mi.params['sigma'].stderr
-    if (math.isnan(ps[5])):
-        ps[5] = 0
-    ps[6] = mi.params['c'].value
-    ps[7] = mi.params['c'].stderr
-    if (math.isnan(ps[7])):
-        ps[7] = 0.0
-    ps[8] = chi2
-    ps[9] = 0.0
-
-    return ps
-    
-
-###############################################################################
-#### Fitting using gaussian and line: fits 1 Gaussian to data containing 1 peak.
-###############################################################################
-def fit_Model(travel, y, p0, fit_xvalues, fit_yvalues):
-    def gaussian(x, amp, mu, wid):
-        """1-d gaussian: gaussian(x, amp, mu, wid)"""
-        return (amp) * np.exp(-(x - mu) ** 2 / (2 * wid ** 2))
-
-    def line(x, slope, intercept):
-        """a line"""
-        return slope * x + intercept
-
-    # -----------------------------------------------------------------------
-    # Define the model and fit it
-    # -----------------------------------------------------------------------
-    mod = Model(gaussian) + Model(line)
-    pars = mod.make_params(amp=p0[0], mu=p0[1], wid=p0[2], slope=0, intercept=p0[3])
-    result = mod.fit(y, pars, x=travel)
-
-    ps = np.zeros(10)
-    rparams = result.params
-    ps[0] = rparams['amp'].value
-    ps[1] = rparams['amp'].stderr
-    ps[2] = rparams['mu'].value
-    ps[3] = rparams['mu'].stderr
-    ps[4] = rparams['wid'].value
-    ps[5] = rparams['wid'].stderr
-#    ps[6] = rparams['intercept'].value
-    ps[6] = travel[0]*rparams['slope'] + rparams['intercept']
-    ps[7] = rparams['intercept'].stderr
-    #ps[8] = rparams['chi-square']
-    ps[8] = 0.0
-    ps[9] = 0.0
-
-    # Populate the fitvalues arrays
-    fit_xvalues.append(travel)
-    fit_yvalues.append(list(result.best_fit))
-    return ps
-
-# Define the function to fit
 def gaussian(x, amp, mu, sigma ):
-    return amp * np.exp(-(x - mu)**2 / (2 * sigma**2))
+	"""! simple gaussian model function
+	@param x - x value point
+	@param amp - amplitude
+	@param sigma - sigma
+	"""
+	return amp * np.exp(-(x - mu)**2 / (2 * sigma**2))
 
 
 def center_of_mass(arr):
-  """Calculates the center of mass of a 1D array.
-
-  Args:
-    arr: The 1D array.
-
-  Returns:
-    The center of mass of the array.
+  """!Calculates the center of mass of a 1D array.
+  @param arr  The 1D array.
+  @return The center of mass of the array.
   """
 
   return np.sum(np.arange(len(arr)) * arr) / np.sum(arr)
 
 
-"""Take in a 1d array, and attempt to fit a gaussian to it
-	Args:
-		array: 1d array
-	Returns: 
-		the parameters with errors
-"""
-def get_gauss_fit_guess( arr ):   
-	
-	#test how gauassian is the data
-	# ~ res = stats.normaltest(arr)
-	# ~ stat = res.statistic
-	# ~ p=res.pvalue
-	
-	# ~ print( "stat = " + str(stat) + " , p-value = " + str(p) )
-	# ~ if p > 0.05:
-		# ~ print('Data is likely normally distributed (p-value > 0.05)')
-	# ~ else:
-		# ~ print('Data is likely not normally distributed (p-value <= 0.05)')
 
+def get_gauss_fit_guess( arr ):   
+	"""!Take in a 1d array, and attempt to fit a gaussian to it
+	@param array - 1d array
+	@return - the parameters with errors
+	"""
 	
-	#need to first make initial guesses
 	
 	#center of mass is our centroid guess
 	mu = center_of_mass(arr)
@@ -211,7 +67,7 @@ def get_gauss_fit_guess( arr ):
 	
 	#estimate sigma
 	#get mean and variance of data
-	mean,noise = calc_noise(0,arr,( len(arr)-2) )
+	mean,noise = calc_noise(arr)
 	
 	
 	l_index =0
@@ -230,7 +86,8 @@ def get_gauss_fit_guess( arr ):
 			r_index = index-1
 			#print( "value = " + str(arr[index]) + " , mean = " + str(mean)   )
 			break
-	
+			
+	#guess initial sigma
 	sigma = r_index - l_index
 	
 	#create an array that is bounded some number of sigma
@@ -239,25 +96,25 @@ def get_gauss_fit_guess( arr ):
 	r_bound = int( (mu + (bounding_width/2)) )
 	bounded_arr = arr[ l_bound:r_bound ]
 	
-	print("left = " + str(l_bound))
-	print("right = " + str(r_bound))
-	print("bound width = " + str(bounding_width))
-	print("arr = " + str(bounded_arr))
+	# ~ print("left = " + str(l_bound))
+	# ~ print("right = " + str(r_bound))
+	# ~ print("bound width = " + str(bounding_width))
+	# ~ print("arr = " + str(bounded_arr))
 	
 	#need a new mu, if using bounded array
 	bounded_mu = center_of_mass(bounded_arr)
 	
-	print("mean = " + str( np.mean(arr) ) )
-	print("mean = " + str( mean ) )
-	print("noise = " + str(noise) )
+	# ~ print("mean = " + str( np.mean(arr) ) )
+	# ~ print("mean = " + str( mean ) )
+	# ~ print("noise = " + str(noise) )
 	
-	print( "left index = " + str(l_index)  )
-	print( "right index = " + str(r_index)  )
+	# ~ print( "left index = " + str(l_index)  )
+	# ~ print( "right index = " + str(r_index)  )
 	
-	print("center of mass = " + str(mu) )
-	print("bounded center of mass = " + str(bounded_mu) )
-	print( "sigma = " + str(sigma)  )
-	print( "amp = " + str(amp)  )
+	# ~ print("center of mass = " + str(mu) )
+	# ~ print("bounded center of mass = " + str(bounded_mu) )
+	# ~ print( "sigma = " + str(sigma)  )
+	# ~ print( "amp = " + str(amp)  )
 	
 	params = Parameters()
 	params.add( "amp" , amp , min=None,max=None )
@@ -269,6 +126,9 @@ def get_gauss_fit_guess( arr ):
 	
 
 def fit_gauss(arr):
+	"""!Fit a gaussian to the data
+	"""
+	#get params, and left and right bound
 	params , l , r = get_gauss_fit_guess(arr)
 	mod = Model(gaussian)
 	xdata = np.arange( len(arr[l:r]) )
@@ -276,15 +136,16 @@ def fit_gauss(arr):
 	result = mod.fit( ydata , params , x= xdata )
 	res = ydata - result.residual
 	
-	report_fit(result)
-	
-	plt.plot( xdata , ydata  )
-	plt.plot( xdata , res )
-	plt.show()
 
 
-#simple model to minimize, modeled after examples from lmfit website:
 def diff_model_min( params , x , data ):
+	"""!Simple diffraction model function, that uses minimization
+	@param params an lmfit.Parameter object that contains the parameters
+	@param x x value
+	@param data minimized array	
+	@return minimized value
+	"""
+	#parse parameters from object
 	parvals = params.valuesdict()
 	IN = parvals['IN']
 	I0 = parvals['I0']
@@ -295,30 +156,23 @@ def diff_model_min( params , x , data ):
 	F = parvals['F']
 	#G = parvals['G']
 	
+	#model function to use
 	model = IN + (I0*(np.sinc( A * (x-B)/math.pi )**2))*(1 + V * np.cos(D*(x-B)-F ) )
+	#trying one more parameter, not used
 	#model = IN + (I0*(np.sinc( A * (x-B)/math.pi )**2))*(1 + V * np.cos(D*(x-B)-F )) + G
 	return model - data
 
 
 def diff_model( x , IN , I0 , A , B , D, V , F):
+	"""!Simple diffraction model without minimization
+	"""
 	return ( IN + (I0*(np.sinc( A * (x-B)/math.pi )**2))*(1 + V * np.cos(D*(x-B)-F ) ) )
 
-# ---------------------------------------------------------------------------
-############################################################
-#### Functions to be fit: Gaussian with a constant offset.
-#### and diffraction model function 
-############################################################
-f_gauss = lambda x, amp, cen, sigma, c: amp * np.exp(-((x - cen) ** 2) / (2.0 * (sigma ** 2))) + c
-#  
-#  name: f_diff
-#  @param
-#  @return
-#  
-f_diff = lambda x, IN, I0, A, B, D, V, F , C : IN + (I0*(np.sinc( A * (x-B)/math.pi )**2))*(1 + V * np.cos(D*(x-B)-F ) ) + C
 
-
-# A container to keep fit parameters and profiles
 class SliData():
+	"""!SliData class, will hold functions initial guesses of parameters
+	and other methods to manipulate the diffraction data
+	"""
 	
 	#using microns
 	dist_slits = 6000 #slit seperation [m]
@@ -336,7 +190,7 @@ class SliData():
 	Yi = IN + I0 * (sinc(A*(Xi-B)/pi)**2) * ( 1 + V * cos(D*(Xi-B)-F) )
 	"""
 	#fit parameters
-	V = 0 #visibility parameter 
+	V = 0 ##visibility parameter 
 	A = 0 #depends on slit size
 	B = 0 # shift of interferogram and image axis, depends on slit size
 	IN = 0 #background intensity
@@ -352,7 +206,11 @@ class SliData():
 	probably should get the initial parameters from config file, then perhaps EPICS
 	"""
 	def __init__(self, profile_array=None, dist=None, expected_es=None  ):
-		
+		"""!Init the SliData Object
+		@param profile_array optional array to start
+		@param optional dist is the slit distance
+		@param optional expected_es energy spread
+		"""
 			
 		#if these were input then set the fields
 		if dist is not None:
@@ -361,42 +219,18 @@ class SliData():
 		if(profile_array is not None):
 			self.set_array(profile_array)
 		
-		
-		# ~ #print("---------------------------------------------------------------\n")
-
-		# ~ #fit the model
-		# ~ self.result , self.chi2 , self.relibility = self.fit_diff_model( params , self.profile_array , self.xdata  )		
-		
-		# ~ if self.relibility == False:
-			# ~ print("Fit was BAD!")
-		# ~ else:
-			# ~ print("FIT was  GOOD")
-		
-		
-		# ~ report_fit(self.result)
-		
-	
-		# ~ print("Params" + str(self.result.params.pretty_print()) )
-		# ~ self.final = self.result.residual + self.profile_array
-		
-
-		#self.espread = self.set_beam_parameters(self.emitx , self.betax , self.etax , self.sigx)
-		
-		# ~ print("-----------------Now use gaussian fit------------------------")
-		
-		#self.r_max , self.r_min = self.fit_max_min_array_to_gaussian( self.profile_array , self.peaks , self.valleys )
-		#~ self.sigma_beam = self.calc_sigma_beam( self.V , self.dist_slits , self.R , self.lam )
-		#~ self.sigma_disp = self.calc_sigma_dispersion( self.sigma_beam , self.sigma_emit  )
-		#~ #self.sigma_disp = self.calc_sigma_dispersion( 88.03 , self.sigma_emit  ) #using joe's example
-		#~ self.espread = self.calc_espread(self.sigma_disp , self.etax)
-	
 
 	
 	def set_array(self, profile_array, dist_slits=None):
+		"""!Set the profile array
+		@param profile array
+		@param optionally set the slit distnace parameter
+		"""
 		
 		if dist_slits is not None:
 			self.dist_slits = dist_slits
 		
+		#set the data type 
 		dt = self.get_data_type(profile_array)
 		print(dt)
 		
@@ -406,13 +240,21 @@ class SliData():
 			
 	
 	def set_beam_parameters(self , emitx , betax , etax , sigx,  expected_es=None ):
+		"""!Set all the beam parameters
+		@param emitx - the emittance twiss parameter
+		@param betax - the beta function twiss parameter
+		@param etax - the dispersion twiss parmeter
+		@sigx sigx - the sigma of the beam
+		@param expected_es - optionally set the expected energy spread
+		"""
 		
+		#set the parameters to these new values
 		self.emitx = emitx
 		self.betax = betax
 		self.etax = etax
 		self.sigx = sigx
 		
-		self.sigma_emit = self.calc_sigma_beta_x( emitx , betax  )
+		self.sigma_emit = self.calc_sigma_beta_x( self.emitx , self.betax  )
 		
 		#from parameters	
 		self.sigma_beam = self.calc_sigma_beam( self.V , self.dist_slits , self.R , self.lam )
@@ -434,17 +276,18 @@ class SliData():
 		
 		self.error_is_espread = abs(  self.expected_es - self.espread )	
 			
-		print(" ---------------------------------------")
-		print( "optimized V = " + str(self.V)   +" and optimized sigma beam = "+str(self.sigma_beam) )
-		print("sigma disp => " + str( self.sigma_disp ))
-		print("sigma emit => " + str( self.sigma_emit ))
-		print("espread design  => " + str( self.espread_design ))
-		print("espread  => " + str( self.espread ))
-		print("err from expected  => " + str( self.error_is_espread  ))	
+		# ~ print(" ---------------------------------------")
+		# ~ print( "optimized V = " + str(self.V)   +" and optimized sigma beam = "+str(self.sigma_beam) )
+		# ~ print("sigma disp => " + str( self.sigma_disp ))
+		# ~ print("sigma emit => " + str( self.sigma_emit ))
+		# ~ print("espread design  => " + str( self.espread_design ))
+		# ~ print("espread  => " + str( self.espread ))
+		# ~ print("err from expected  => " + str( self.error_is_espread  ))	
 		
 		return self.espread
 	
 	def fit(self):
+		"""!do the fit"""
 		
 		#set all the initial parameters
 		self.params = self.set_initial_model_params(self.profile_array)
@@ -465,9 +308,13 @@ class SliData():
 		#self.set_beam_parameters()
 		
 	def set_xdata(self, profile_arr):
+		"""!Set the x data"""
 		return np.arange(len(profile_arr))		
 		
 	def get_data_type(self, profile_array):
+		"""!figure out a data type based on the max value. Used for the numpy array
+		@return the data type
+		"""
 		# guess data type based on max values
 		max_val = np.max( profile_array )
 		print("Max value => " + str(max_val) )
@@ -771,7 +618,7 @@ class SliData():
 		if IN <= 0:
 			IN = 0.01
 		
-		mean , noise = calc_noise( 0,profile_arr,len(profile_arr) )
+		mean , noise = calc_noise( profile_arr )
 		
 		
 		#print("IN = " + str(IN) )
