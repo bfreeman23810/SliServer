@@ -1,7 +1,3 @@
-#!/home/brian/venv/bin/python3
-#/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
-
-
 ##
 # @mainpage SliServer Project
 #

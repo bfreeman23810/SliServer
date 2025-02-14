@@ -1,6 +1,3 @@
-#!/home/brian/venv/bin/python3
-#!/cs/dvlhome/apps/s/sliServer/dvl/src/venv/bin/python3
-
 ##
 # @file SliData.py
 # @section sli_data_description Description:
@@ -411,7 +408,7 @@ class SliData():
 		
 		return params
 	
-	def get_signifigance_level(self, alpha=0.05 , param , param_err , dof ):
+	def get_signifigance_level(self, alpha, param , param_err , dof ):
 		"""!Uses the scipy.stats library to find the signafigance level of the parameter
 		@param alpha is the alpha to use, default and standard is 0.05
 		@param param is the parmeter that we need to get the pvalue
@@ -800,9 +797,9 @@ class SliData():
 		@param profile_arr is the profile array of the image
 		@param is the result array from the fit
 		"""
-		 mi = lmfit.minimize(residual, p)
-		 dof = len(x) - ndim
-		 chi2 = sum(residual(p) ** 2) / dof
+		mi = lmfit.minimize(residual, p)
+		dof = len(x) - ndim
+		chi2 = sum(residual(p) ** 2) / dof
 		
 	
 	def fit_diff_model(self , params , profile_arr , xdata  ):
@@ -885,12 +882,18 @@ class SliData():
 		return self.final
 	
 	def plot(self , save_path=None , title=None , xlabel=None , ylabel=None):
+		"""! plot the profile and fit 
+		@param save_path optionally set where to save the image of the plot
+		@param title optionally set the title of the plot
+		@param xlabel optionally set the x axis label
+		@param ylabel optionally set the y axis label
+		"""
 		
 		plt.cla()
 		#plot label
 		#l='fit: V=%5.3f +/- %5.3f' % (self.V, self.V_err)
 		
-		
+		#defualt x and y labels
 		plt.xlabel("Index")
 		plt.ylabel("Intensity [Ph/s/.1%bw/mm^2] ")
 		
@@ -941,27 +944,41 @@ class SliData():
 
 
 def process_sankalp_sims_pass1():
+	"""!process the first pass simulation files
+	"""
+	
+	#first pass values for simulations
+	etax=-3701650 #desgin dispersion x this will come from CED [m]
+	betax=20038000 #desgin beta x this will come from CED [m]
+	emitx=0000000.000178 #10^-10 meters design emittance x from CED [m]
+	sigx=77.38
 	
 	path="./data/sankalp/Pass1/"
 	dir_list = os.listdir(path)
 	print(dir_list)
 	
 	for f in dir_list:
-		#get info from title
+		#get info from file name if file ends with '.txt'
 		if f.endswith(".txt"):
 			
+			#use pandas to read the csv file
 			df = pd.read_csv( path+"/"+f , delimiter='\t' , header=None )
 			
+			#expects that parameters are in the title and commma seperated
 			f = f.strip(".txt")
 			sp=f.split(',')
 			print(sp)
 			
+			#start with the slit seperation, which may or may not be present
 			if len(sp)==4:
 				ss=sp[3]
 			else:
 				ss=''
+			#then the first value is the slit distance in mm
 			slit_dist=int(sp[0])*1000
+			#next is the slit width
 			slit_width = float(sp[1])
+			#next is teh expected energy spread
 			espread=float(sp[2])
 			
 			img = ad.ADImage(df.shape[1] , df.shape[0], df.to_numpy().T, 'sankalp_sim_sd-'+str(slit_dist/1000) + '_sw-'+str(slit_width)+'_es-'+str(espread)+'_ss-'+ss)
@@ -971,8 +988,9 @@ def process_sankalp_sims_pass1():
 			sli.plot( "./data/sankalp/plots/" + img.uid + ".png" , " Slit Distance=%1.0dmm , Slit Width=%1.1fmm, ES=%1.1e"%(slit_dist/1000,slit_width, espread) )
 
 def process_sankalp_sims_pass2():
+	"""!process the first pass simulation files
+	"""
 	
-
 	#second pass defaults
 	etax=-3682094 #desgin dispersion x this will come from CED [m]
 	betax=1900104 #desgin beta x this will come from CED [m]
@@ -983,22 +1001,30 @@ def process_sankalp_sims_pass2():
 	dir_list = os.listdir(path)
 	print(dir_list)
 	
+	#get info from file name if file ends with '.txt'
 	for f in dir_list:
 		#get info from title
 		if f.endswith(".txt"):
 			
-			df = pd.read_csv( path+"/"+f , delimiter=',' , header=None )
 			
+			#use pandas to read the csv file
+			df = pd.read_csv( path+"/"+f , delimiter='\t' , header=None )
+			
+			#expects that parameters are in the title and commma seperated
 			f = f.strip(".txt")
 			sp=f.split(',')
 			print(sp)
 			
+			#start with the slit seperation, which may or may not be present
 			if len(sp)==4:
 				ss=sp[3]
 			else:
 				ss=''
+			#then the first value is the slit distance in mm
 			slit_dist=int(sp[0])*1000
+			#next is the slit width
 			slit_width = float(sp[1])
+			#next is teh expected energy spread
 			espread=float(sp[2])
 			
 			img = ad.ADImage(df.shape[1] , df.shape[0], df.to_numpy().T, 'sankalp_sim_sd-'+str(slit_dist/1000) + '_sw-'+str(slit_width)+'_es-'+str(espread)+'_ss-'+ss)
@@ -1009,7 +1035,7 @@ def process_sankalp_sims_pass2():
 
 
 def test():
-	
+	"""!simple area to test functionality of SliData"""
 	
 	# Specify the file path
 	#file_path = './data/2d_joes_sim.txt'
@@ -1055,6 +1081,7 @@ def test():
 
 	
 	
+#process_sankalp_sims_pass1()
 #process_sankalp_sims_pass2()
 #test()
 
